@@ -1,5 +1,5 @@
 name: Windows Build
-on: [push, pull_request,]
+on: [push, pull_request]
 jobs:
   build:
     name: Build
@@ -19,7 +19,7 @@ jobs:
       targetName: RedPanda-CPP.exe
     steps:
       - name: Install Qt
-        uses: jurplel/install-qt-action@v2.13.0
+        uses: jurplel/install-qt-action@v2.14.0
         with:
           version: ${{ matrix.qt_ver }}
           arch: ${{ matrix.qt_arch }}
@@ -50,7 +50,7 @@ jobs:
         shell: cmd
         run: |
           qmake
-          mingw32-make
+          make
       - name: package
         id: package      
         env:
