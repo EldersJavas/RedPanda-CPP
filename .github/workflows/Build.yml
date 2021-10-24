@@ -9,7 +9,14 @@ jobs:
         os: [ubuntu-20.04, windows-2019] # macos
         version: ['5.12.11','5.12.10']  #latest 5.15.2 '5.9.9''6.2'
     steps:
+      
       - uses: actions/checkout@v2
+      - name: Cache Qt
+        id: cache-qt
+        uses: actions/cache@v1  # not v2!
+        with:
+          path: ../Qt
+          key: ${{ runner.os }}-QtCache
       - name: Install Qt with options
         uses: jurplel/install-qt-action@v2
         with:
