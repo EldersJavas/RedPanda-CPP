@@ -80,7 +80,7 @@ int SynEditStringList::leftBraces(int Index)
 {
     QMutexLocker locker(&mMutex);
     if (Index>=0 && Index < mList.size()) {
-        return mList[Index]->fLeftBraces;
+        return mList[Index]->fRange.leftBraces;
     } else
         return 0;
 }
@@ -89,7 +89,7 @@ int SynEditStringList::rightBraces(int Index)
 {
     QMutexLocker locker(&mMutex);
     if (Index>=0 && Index < mList.size()) {
-        return mList[Index]->fRightBraces;
+        return mList[Index]->fRange.rightBraces;
     } else
         return 0;
 }
@@ -128,7 +128,7 @@ QString SynEditStringList::lineBreak() const
     return "\n";
 }
 
-const SynRangeState& SynEditStringList::ranges(int Index)
+SynRangeState SynEditStringList::ranges(int Index)
 {
     QMutexLocker locker(&mMutex);
     if (Index>=0 && Index < mList.size()) {
@@ -171,7 +171,7 @@ void SynEditStringList::setAppendNewLineAtEOF(bool appendNewLineAtEOF)
     mAppendNewLineAtEOF = appendNewLineAtEOF;
 }
 
-void SynEditStringList::setRange(int Index, const SynRangeState& ARange, int ALeftBraces, int ARightBraces)
+void SynEditStringList::setRange(int Index, const SynRangeState& ARange)
 {
     QMutexLocker locker(&mMutex);
     if (Index<0 || Index>=mList.count()) {
@@ -179,8 +179,6 @@ void SynEditStringList::setRange(int Index, const SynRangeState& ARange, int ALe
     }
     beginUpdate();
     mList[Index]->fRange = ARange;
-    mList[Index]->fLeftBraces = ALeftBraces;
-    mList[Index]->fRightBraces = ARightBraces;
     endUpdate();
 }
 
@@ -588,7 +586,8 @@ void SynEditStringList::loadFromFile(const QString& filename, const QByteArray& 
 
 
 
-void SynEditStringList::saveToFile(QFile &file, const QByteArray& encoding, QByteArray& realEncoding)
+void SynEditStringList::saveToFile(QFile &file, const QByteArray& encoding,
+                                   const QByteArray& defaultEncoding, QByteArray& realEncoding)
 {
     QMutexLocker locker(&mMutex);
     if (!file.open(QFile::WriteOnly | QFile::Truncate))
@@ -607,7 +606,9 @@ void SynEditStringList::saveToFile(QFile &file, const QByteArray& encoding, QByt
     } else if (realEncoding == ENCODING_SYSTEM_DEFAULT) {
         codec = QTextCodec::codecForLocale();
     } else if (realEncoding == ENCODING_AUTO_DETECT) {
-        codec = QTextCodec::codecForLocale();
+        codec = QTextCodec::codecForName(defaultEncoding);
+        if (!codec)
+            codec = QTextCodec::codecForLocale();
     } else {
         codec = QTextCodec::codecForName(realEncoding);
     }

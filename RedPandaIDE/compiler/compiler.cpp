@@ -7,7 +7,6 @@
 #include <QProcess>
 #include <QString>
 #include <QTextCodec>
-#include <QDebug>
 #include <QTime>
 #include <QApplication>
 #include "../editor.h"
@@ -295,6 +294,8 @@ QString Compiler::getCCompileArguments(bool checkSyntax)
                 value = pOption->value;
             }
             if (value > 0 && pOption->isC) {
+                if (checkSyntax && pOption->isLinker)
+                    continue;
                 if (pOption->choices.isEmpty()) {
                     result += " " + pOption->setting;
                 } else if (value < pOption->choices.size()) {
@@ -342,6 +343,8 @@ QString Compiler::getCppCompileArguments(bool checkSyntax)
                 value = pOption->value;
             }
             if (value > 0 && pOption->isCpp) {
+                if (checkSyntax && pOption->isLinker)
+                    continue;
                 if (pOption->choices.isEmpty()) {
                     result += " " + pOption->setting;
                 } else if (value < pOption->choices.size()) {
@@ -497,7 +500,7 @@ QString Compiler::getLibraryArguments(FileType fileType)
 
 QString Compiler::parseFileIncludesForAutolink(
         const QString &filename,
-        QSet<QString> parsedFiles,
+        QSet<QString>& parsedFiles,
         PCppParser& parser)
 {
     QString result;

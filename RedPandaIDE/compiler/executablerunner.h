@@ -1,27 +1,28 @@
 #ifndef EXECUTABLERUNNER_H
 #define EXECUTABLERUNNER_H
 
-#include <QThread>
+#include "runner.h"
 
-class ExecutableRunner : public QThread
+class ExecutableRunner : public Runner
 {
     Q_OBJECT
 public:
-    ExecutableRunner(const QString& filename, const QString& arguments, const QString& workDir);
+    ExecutableRunner(const QString& filename, const QString& arguments, const QString& workDir,
+                     QObject* parent = nullptr);
 
-signals:
-    void started();
-    void terminated();
-    void runErrorOccurred(const QString& reason);
+    const QString &redirectInputFilename() const;
+    void setRedirectInputFilename(const QString &newDataFile);
 
-public slots:
-    void stop();
+    bool redirectInput() const;
+    void setRedirectInput(bool isRedirect);
+
+    bool startConsole() const;
+    void setStartConsole(bool newStartConsole);
 
 private:
-    QString mFilename;
-    QString mArguments;
-    QString mWorkDir;
-    bool mStop;
+    QString mRedirectInputFilename;
+    bool mRedirectInput;
+    bool mStartConsole;
 
     // QThread interface
 protected:

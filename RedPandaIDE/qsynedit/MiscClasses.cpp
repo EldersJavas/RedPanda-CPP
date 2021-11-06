@@ -1,6 +1,5 @@
 #include "MiscClasses.h"
 #include "algorithm"
-#include <QDebug>
 
 SynGutter::SynGutter(QObject *parent):
     QObject(parent)
@@ -55,6 +54,16 @@ void SynGutter::setAutoSize(bool value)
 void SynGutter::setChanged()
 {
     emit changed();
+}
+
+const QColor &SynGutter::activeLineTextColor() const
+{
+    return mActiveLineTextColor;
+}
+
+void SynGutter::setActiveLineTextColor(const QColor &newActiveLineTextColor)
+{
+    mActiveLineTextColor = newActiveLineTextColor;
 }
 
 QColor SynGutter::textColor() const

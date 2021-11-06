@@ -5,6 +5,7 @@
 #include <QMainWindow>
 #include <QTimer>
 #include <QFileSystemModel>
+#include <QTcpServer>
 #include "common.h"
 #include "widgets/searchresultview.h"
 #include "widgets/classbrowser.h"
@@ -18,6 +19,7 @@
 #include "toolsmanager.h"
 #include "widgets/labelwithmenu.h"
 #include "widgets/bookmarkmodel.h"
+#include "widgets/ojproblemsetmodel.h"
 
 
 QT_BEGIN_NAMESPACE
@@ -26,6 +28,12 @@ QT_END_NAMESPACE
 
 enum class CompileTarget {
     Invalid, None, File, Project, SyntaxCheck
+};
+
+enum class RunType {
+    Normal,
+    CurrentProblemCase,
+    ProblemCases
 };
 
 class EditorList;
@@ -46,7 +54,9 @@ class MainWindow : public QMainWindow
 
     enum class CompileSuccessionTaskType {
         None,
-        Run,
+        RunNormal,
+        RunProblemCases,
+        RunCurrentProblemCase,
         Debug,
         Profile
     };
@@ -75,8 +85,8 @@ public:
     void updateDebuggerSettings();
     void checkSyntaxInBack(Editor* e);
     bool compile(bool rebuild=false);
-    void runExecutable(const QString& exeName, const QString& filename=QString());
-    void runExecutable();
+    void runExecutable(const QString& exeName, const QString& filename=QString(),RunType runType = RunType::Normal);
+    void runExecutable(RunType runType = RunType::Normal);
     void debug();
     void showSearchPanel(bool showReplace = false);
 
@@ -143,6 +153,7 @@ public:
 
     void openFile(const QString& filename, QTabWidget* page=nullptr);
     void openProject(const QString& filename);
+    void changeOptions(const QString& widgetName=QString(), const QString& groupName=QString());
 
 public slots:
     void onCompileLog(const QString& msg);
@@ -152,6 +163,9 @@ public slots:
     void onCompileErrorOccured(const QString& reason);
     void onRunErrorOccured(const QString& reason);
     void onRunFinished();
+    void onRunProblemFinished();
+    void onOJProblemCaseStarted(const QString& id, int current, int total);
+    void onOJProblemCaseFinished(const QString& id, int current, int total);
     void cleanUpCPUDialog();
     void onDebugCommandInput(const QString& command);
     void onDebugEvaluateInput();
@@ -194,6 +208,10 @@ private:
     void includeOrSkipDirs(const QStringList& dirs, bool skip);
     void showSearchReplacePanel(bool show);
     void setFilesViewRoot(const QString& path);
+    void clearIssues();
+    void doCompileRun(RunType runType);
+    void updateProblemCaseOutput(POJProblemCase problemCase);
+    void applyCurrentProblemCaseChanges();
 
 private slots:
     void onAutoSaveTimeout();
@@ -209,6 +227,12 @@ private slots:
     void onDebugConsoleContextMenu(const QPoint& pos);
     void onFileEncodingContextMenu(const QPoint& pos);
     void onFilesViewContextMenu(const QPoint& pos);
+    void onLstProblemSetContextMenu(const QPoint& pos);
+    void onProblemSetIndexChanged(const QModelIndex &current, const QModelIndex &previous);
+    void onProblemCaseIndexChanged(const QModelIndex &current, const QModelIndex &previous);
+    void onProblemNameChanged(int index);
+    void onNewProblemConnection();
+    void onEditorClosed();
 
     void onShowInsertCodeSnippetMenu();
 
@@ -308,7 +332,7 @@ private slots:
 
     void on_cbSearchHistory_currentIndexChanged(int index);
 
-    void on_btnSearchAgin_clicked();
+    void on_btnSearchAgain_clicked();
     void on_actionRemove_Watch_triggered();
 
     void on_actionRemove_All_Watches_triggered();
@@ -429,6 +453,28 @@ private slots:
 
     void on_actionOpen_Folder_triggered();
 
+    void on_actionRun_Parameters_triggered();
+
+    void on_btnNewProblemSet_clicked();
+
+    void on_btnAddProblem_clicked();
+
+    void on_btnRemoveProblem_clicked();
+
+    void on_btnSaveProblemSet_clicked();
+
+    void on_btnLoadProblemSet_clicked();
+
+    void on_btnAddProblemCase_clicked();
+
+    void on_btnRunAllProblemCases_clicked();
+
+    void on_actionC_Reference_triggered();
+
+    void on_btnRemoveProblemCase_clicked();
+
+    void on_btnOpenProblemAnswer_clicked();
+
 private:
     Ui::MainWindow *ui;
     EditorList *mEditorList;
@@ -469,6 +515,9 @@ private:
     PTodoParser mTodoParser;
     PToolsManager mToolsManager;
     QFileSystemModel mFileSystemModel;
+    OJProblemSetModel mOJProblemSetModel;
+    OJProblemModel mOJProblemModel;
+    int mOJProblemSetNameCounter;
 
     bool mCheckSyntaxInBack;
     bool mOpenClosingBottomPanel;
@@ -487,6 +536,8 @@ private:
     bool mClosing;
     bool mSystemTurnedOff;
     QPoint mEditorContextMenuPos;
+    QTcpServer mTcpServer;
+    QColor mErrorColor;
 
     //actions for compile issue table
     QAction * mTableIssuesCopyAction;
@@ -500,6 +551,7 @@ private:
     //actions for breakpoint view
     QAction * mBreakpointViewPropertyAction;
     QAction * mBreakpointViewRemoveAllAction;
+    QAction * mBreakpointViewRemoveAction;
 
     //actions for project view
     QAction * mProject_Add_Folder;
@@ -533,12 +585,14 @@ private:
     QAction * mBookmark_RemoveAll;
     QAction * mBookmark_Modify;
 
+    //action for problem set
+    QAction * mProblem_Properties;
+
    // QWidget interface
 protected:
     void closeEvent(QCloseEvent *event) override;
     void showEvent(QShowEvent* event) override;
-//    void dragEnterEvent(QDragEnterEvent *event) override;
-//    void dropEvent(QDropEvent *event) override;
+    void hideEvent(QHideEvent *event) override;
 };
 
 extern MainWindow* pMainWindow;

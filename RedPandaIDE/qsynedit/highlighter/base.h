@@ -10,13 +10,29 @@
 #include <QVector>
 #include "../Types.h"
 
+enum SynIndentType {
+    sitBrace = 0,
+    sitParenthesis = 1,
+    sitBracket = 2,
+    sitStatement = 3,
+};
+
 struct SynRangeState {
-    int state;
-    int spaceState;
-    int braceLevel;
-    int bracketLevel;
-    int parenthesisLevel;
+    int state;  // current syntax parsing state
+    int spaceState; // the last syntax parsing state before meeting space
+    int braceLevel; // current braces embedding level (needed by rainbow color)
+    int bracketLevel; // current brackets embedding level (needed by rainbow color)
+    int parenthesisLevel; // current parenthesis embedding level (needed by rainbow color)
+    int leftBraces; // unpairing left braces in the current line ( needed by block folding)
+    int rightBraces; // unparing right braces in the current line (needed by block folding)
+    QVector<int> indents; // indents stack (needed by auto indent)
+    int firstIndentThisLine; /* index of first indent that appended to the indents
+                              *  stack at this line ( need by auto indent) */
+    QVector<int> matchingIndents; /* the indent matched ( and removed )
+                              but not started at this line
+                                (need by auto indent) */
     bool operator==(const SynRangeState& s2);
+    int getLastIndent();
 };
 
 typedef int SynTokenKind;
@@ -107,9 +123,6 @@ public:
     virtual void setState(const SynRangeState& rangeState) = 0;
     virtual void setLine(const QString& newLine, int lineNumber) = 0;
     virtual void resetState() = 0;
-
-    virtual int getLeftBraces();
-    virtual int getRightBraces();
 
     virtual QString languageName() = 0;
     virtual SynHighlighterLanguage language() = 0;

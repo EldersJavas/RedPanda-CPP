@@ -125,6 +125,8 @@ private:
     void unknownProc();
     void xorSymbolProc();
     void processChar();
+    void popIndents(int indentType);
+    void pushIndents(int indentType);
 
 private:
     bool mAsmStart;
@@ -179,9 +181,6 @@ public:
 
     QString languageName() override;
     SynHighlighterLanguage language() override;
-
-    int getLeftBraces() override;
-    int getRightBraces() override;
 
     // SynHighlighter interface
 public:

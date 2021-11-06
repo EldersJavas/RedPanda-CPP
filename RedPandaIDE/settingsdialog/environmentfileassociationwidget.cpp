@@ -128,31 +128,6 @@ void FileAssociationModel::saveAssociations()
 
 }
 
-bool readRegistry(HKEY key,QByteArray subKey, QString& value) {
-    DWORD dataSize;
-    LONG result;
-    result = RegGetValueA(key,subKey,
-                 "", RRF_RT_REG_SZ | RRF_RT_REG_MULTI_SZ,
-                 NULL,
-                 NULL,
-                 &dataSize);
-    if (result!=ERROR_SUCCESS)
-        return false;
-    char * buffer = new char[dataSize+10];
-    result = RegGetValueA(HKEY_CLASSES_ROOT,subKey,
-                 "", RRF_RT_REG_SZ | RRF_RT_REG_MULTI_SZ,
-                 NULL,
-                 buffer,
-                 &dataSize);
-    if (result!=ERROR_SUCCESS) {
-        delete[] buffer;
-        return false;
-    }
-    value=QString::fromLocal8Bit(buffer);
-    delete [] buffer;
-    return true;
-}
-
 bool FileAssociationModel::checkAssociation(const QString &extension, const QString &filetype, const QString &verb, const QString &serverApp)
 {
     HKEY key;
@@ -170,9 +145,9 @@ bool FileAssociationModel::checkAssociation(const QString &extension, const QStr
 
     QString keyString = QString("%1\\Shell\\%2\\Command").arg(filetype).arg(verb);
     QString value1,value2;
-    if (!readRegistry(HKEY_CLASSES_ROOT,keyString.toLocal8Bit(),value1))
+    if (!readRegistry(HKEY_CLASSES_ROOT,keyString.toLocal8Bit(),"",value1))
         return false;
-    if (!readRegistry(HKEY_CLASSES_ROOT,extension.toLocal8Bit(),value2))
+    if (!readRegistry(HKEY_CLASSES_ROOT,extension.toLocal8Bit(),"",value2))
         return false;
 
     return (value2 == filetype)

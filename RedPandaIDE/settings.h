@@ -34,6 +34,12 @@ extern const char ValueToChar[28];
 
 class Settings;
 
+enum CompilerSetType {
+    CST_RELEASE,
+    CST_DEBUG,
+    CST_PROFILING
+};
+
 typedef struct {
     QString name; // language table index of "Generate debugging info"
     QString section; // language table index of "C options"
@@ -327,11 +333,13 @@ public:
         int mouseWheelScrollSpeed() const;
         void setMouseWheelScrollSpeed(int newMouseWheelScrollSpeed);
 
+        bool useUTF8ByDefault() const;
+        void setUseUTF8ByDefault(bool newUseUTF8ByDefault);
+
     private:
         //General
         // indents
         bool mAutoIndent;
-        bool mAddIndent;
         bool mTabToSpaces;
         int mTabWidth;
         bool mShowIndentLines;
@@ -426,6 +434,7 @@ public:
         bool mReadOnlySytemHeader;
         bool mAutoLoadLastFiles;
         bool mDefaultFileCpp;
+        bool mUseUTF8ByDefault;
 
         //hints tooltip
         bool mEnableTooltips;
@@ -754,6 +763,15 @@ public:
         const QString &inputFilename() const;
         void setInputFilename(const QString &newInputFilename);
 
+        bool enableProblemSet() const;
+        void setEnableProblemSet(bool newEnableProblemSet);
+
+        bool enableCompetitiveCompanion() const;
+        void setEnableCompetitiveCompanion(bool newEnableCompetitiveCompanion);
+
+        int competivieCompanionPort() const;
+        void setCompetivieCompanionPort(int newCompetivieCompanionPort);
+
     private:
         // general
         bool mPauseConsole;
@@ -762,6 +780,11 @@ public:
         QString mParams;
         bool mRedirectInput;
         QString mInputFilename;
+
+        //Problem Set
+        bool mEnableProblemSet;
+        bool mEnableCompetitiveCompanion;
+        int mCompetivieCompanionPort;
 
     protected:
         void doSave() override;
@@ -964,6 +987,9 @@ public:
 
         void setCompilerType(const QString &newCompilerType);
 
+        int compilerSetType() const;
+        void setCompilerSetType(int newCompilerSetType);
+
     private:
         // Initialization
         void setExecutables();
@@ -999,7 +1025,8 @@ public:
         QString mName; // "TDM-GCC 4.7.1 Release"
         QStringList mDefines; // list of predefined constants
         QString mTarget; // 'X86_64' / 'i686'
-        QString mCompilerType;
+        QString mCompilerType; // 'Clang' / 'GCC'
+        int mCompilerSetType; // RELEASE/ DEBUG/ Profile
 
         // User settings
         bool mUseCustomCompileParams;

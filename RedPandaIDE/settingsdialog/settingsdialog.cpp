@@ -19,6 +19,7 @@
 #include "environmentfileassociationwidget.h"
 #include "environmentfolderswidget.h"
 #include "executorgeneralwidget.h"
+#include "executorproblemsetwidget.h"
 #include "debuggeneralwidget.h"
 #include "formattergeneralwidget.h"
 #include "projectgeneralwidget.h"
@@ -175,6 +176,10 @@ PSettingsDialog SettingsDialog::optionDialog()
     widget->init();
     dialog->addWidget(widget);
 
+    widget = new ExecutorProblemSetWidget(tr("Problem Set"),tr("Program Runner"));
+    widget->init();
+    dialog->addWidget(widget);
+
     widget = new DebugGeneralWidget(tr("General"),tr("Debugger"));
     widget->init();
     dialog->addWidget(widget);
@@ -239,6 +244,23 @@ PSettingsDialog SettingsDialog::projectOptionDialog()
     dialog->selectFirstWidget();
 
     return dialog;
+}
+
+bool SettingsDialog::setCurrentWidget(const QString &widgetName, const QString &groupName)
+{
+    QList<QStandardItem*> items = model.findItems(groupName);
+    if (items.isEmpty())
+        return false;
+    QStandardItem* pGroupItem = items[0];
+    for (int i=0;i<pGroupItem->rowCount();i++) {
+        QStandardItem* pWidgetItem = pGroupItem->child(i);
+        if (pWidgetItem->text() == widgetName) {
+            ui->widgetsView->setCurrentIndex(pWidgetItem->index());
+            on_widgetsView_clicked(pWidgetItem->index());
+            return true;
+        }
+    }
+    return false;
 }
 
 

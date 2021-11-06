@@ -154,6 +154,7 @@ QString parseMacros(const QString& s);
 
 QStringList ReadFileToLines(const QString& fileName, QTextCodec* codec);
 QStringList ReadFileToLines(const QString& fileName);
+QByteArray ReadFileToByteArray(const QString& fileName);
 void ReadFileToLines(const QString& fileName, QTextCodec* codec, LineProcessFunc lineFunc);
 void StringsToFile(const QStringList& list, const QString& fileName);
 void StringToFile(const QString& str, const QString& fileName);
@@ -165,6 +166,8 @@ QString TrimRight(const QString& s);
 QString TrimLeft(const QString& s);
 bool StringIsBlank(const QString& s);
 int compareFileModifiedTime(const QString& filename1, const QString& filename2);
+QByteArray getHTTPBody(const QByteArray& content);
+bool haveGoodContrast(const QColor& c1, const QColor &c2);
 
 //void changeTheme(const QString& themeName);
 
@@ -187,6 +190,8 @@ QByteArray toByteArray(const QString& s);
 QString fromByteArray(const QByteArray& s);
 
 int getNewFileNumber();
+
+bool readRegistry(HKEY key,const QByteArray& subKey, const QByteArray& name, QString& value);
 
 class CppParser;
 void resetCppParser(std::shared_ptr<CppParser> parser);

@@ -7,6 +7,7 @@
 #include "systemconsts.h"
 #include <QDebug>
 #include <QMessageBox>
+#include <QStandardPaths>
 
 const char ValueToChar[28] = {'0', '1', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h',
                               'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r',
@@ -159,7 +160,12 @@ QString Settings::Dirs::templateDir() const
 
 QString Settings::Dirs::projectDir() const
 {
-    return includeTrailingPathDelimiter(app()) + "projects";
+    if (isGreenEdition()) {
+        return includeTrailingPathDelimiter(app()) + "projects";
+    } else {
+        return includeTrailingPathDelimiter(QStandardPaths::standardLocations(QStandardPaths::DocumentsLocation)[0])
+                         + "projects";
+    }
 }
 
 QString Settings::Dirs::data(Settings::Dirs::DataType dataType) const
@@ -505,6 +511,16 @@ int Settings::Editor::mouseWheelScrollSpeed() const
 void Settings::Editor::setMouseWheelScrollSpeed(int newMouseWheelScrollSpeed)
 {
     mMouseWheelScrollSpeed = newMouseWheelScrollSpeed;
+}
+
+bool Settings::Editor::useUTF8ByDefault() const
+{
+    return mUseUTF8ByDefault;
+}
+
+void Settings::Editor::setUseUTF8ByDefault(bool newUseUTF8ByDefault)
+{
+    mUseUTF8ByDefault = newUseUTF8ByDefault;
 }
 
 bool Settings::Editor::enableTooltips() const
@@ -972,7 +988,6 @@ void Settings::Editor::doSave()
 
     // indents
     saveValue("auto_indent", mAutoIndent);
-    saveValue("add_indent", mAddIndent);
     saveValue("tab_to_spaces", mTabToSpaces);
     saveValue("tab_width", mTabWidth);
     saveValue("show_indent_lines", mShowIndentLines);
@@ -1065,6 +1080,8 @@ void Settings::Editor::doSave()
     saveValue("readonly_system_header",mReadOnlySytemHeader);
     saveValue("auto_load_last_files",mAutoLoadLastFiles);
     saveValue("default_file_cpp",mDefaultFileCpp);
+    saveValue("use_utf8_by_default",mUseUTF8ByDefault);
+
 
     //tooltips
     saveValue("enable_tooltips",mEnableTooltips);
@@ -1080,7 +1097,6 @@ void Settings::Editor::doLoad()
 
     // indents
     mAutoIndent = boolValue("auto_indent", true);
-    mAddIndent = boolValue("add_indent", true);
     mTabToSpaces = boolValue("tab_to_spaces",false);
     mTabWidth = intValue("tab_width",4);
     mShowIndentLines = boolValue("show_indent_lines",true);
@@ -1112,7 +1128,7 @@ void Settings::Editor::doLoad()
     //Font
     //font
     mFontName = stringValue("font_name","consolas");
-    mFontSize = intValue("font_size",QGuiApplication::font().pointSize());
+    mFontSize = intValue("font_size",14);
     mFontOnlyMonospaced = boolValue("font_only_monospaced",true);
 
     //gutter
@@ -1178,6 +1194,7 @@ void Settings::Editor::doLoad()
     mReadOnlySytemHeader = boolValue("readonly_system_header",true);
     mAutoLoadLastFiles = boolValue("auto_load_last_files",true);
     mDefaultFileCpp = boolValue("default_file_cpp",true);
+    mUseUTF8ByDefault = boolValue("use_utf8_by_default",false);
 
     //tooltips
     mEnableTooltips = boolValue("enable_tooltips",true);
@@ -1266,16 +1283,6 @@ bool Settings::Editor::tabToSpaces() const
 void Settings::Editor::setTabToSpaces(bool tabToSpaces)
 {
     mTabToSpaces = tabToSpaces;
-}
-
-bool Settings::Editor::addIndent() const
-{
-    return mAddIndent;
-}
-
-void Settings::Editor::setAddIndent(bool addIndent)
-{
-    mAddIndent = addIndent;
 }
 
 Settings::CompilerSet::CompilerSet(const QString& compilerFolder):
@@ -2191,6 +2198,16 @@ QByteArray Settings::CompilerSet::getCompilerOutput(const QString &binDir, const
     return result.trimmed();
 }
 
+int Settings::CompilerSet::compilerSetType() const
+{
+    return mCompilerSetType;
+}
+
+void Settings::CompilerSet::setCompilerSetType(int newCompilerSetType)
+{
+    mCompilerSetType = newCompilerSetType;
+}
+
 void Settings::CompilerSet::setCompilerType(const QString &newCompilerType)
 {
     mCompilerType = newCompilerType;
@@ -2248,6 +2265,11 @@ static void setReleaseOptions(Settings::PCompilerSet pSet) {
         pSet->setOption(pOption,'1');
     }
 
+    pOption = pSet->findOption("-pipe");
+    if (pOption) {
+        pSet->setOption(pOption,'1');
+    }
+
 //    pOption = pSet->findOption("-static");
 //    if (pOption) {
 //        pSet->setOption(pOption,'1');
@@ -2268,6 +2290,11 @@ static void setDebugOptions(Settings::PCompilerSet pSet) {
     if (pOption) {
         pSet->setOption(pOption,'1');
     }
+    pOption = pSet->findOption("-pipe");
+    if (pOption) {
+        pSet->setOption(pOption,'1');
+    }
+
 //    pOption = pSet->findOption("-static");
 //    if (pOption) {
 //        pSet->setOption(pOption,'1');
@@ -2277,6 +2304,11 @@ static void setDebugOptions(Settings::PCompilerSet pSet) {
 
 static void setProfileOptions(Settings::PCompilerSet pSet) {
     PCompilerOption pOption = pSet->findOption("-pg");
+    if (pOption) {
+        pSet->setOption(pOption,'1');
+    }
+
+    pOption = pSet->findOption("-pipe");
     if (pOption) {
         pSet->setOption(pOption,'1');
     }
@@ -2305,14 +2337,17 @@ void Settings::CompilerSets::addSets(const QString &folder)
         platformName = "32-bit";
     }
     baseSet->setName(baseName + " " + platformName + " Release");
+    baseSet->setCompilerSetType(CompilerSetType::CST_RELEASE);
     setReleaseOptions(baseSet);
 
     baseSet = addSet(folder);
     baseSet->setName(baseName + " " + platformName + " Debug");
+    baseSet->setCompilerSetType(CompilerSetType::CST_DEBUG);
     setDebugOptions(baseSet);
 
     baseSet = addSet(folder);
     baseSet->setName(baseName + " " + platformName + " Profiling");
+    baseSet->setCompilerSetType(CompilerSetType::CST_PROFILING);
     setProfileOptions(baseSet);
 
     mDefaultIndex = mList.size() - 2;
@@ -2371,7 +2406,9 @@ void Settings::CompilerSets::loadSets()
                                      .arg(pCurrentSet->name())
                                      +"<br /><br />"
                                      +msg
-                                     +"Would you like Red Panda C++ to remove them for you and add the default paths to the valid paths?<br /><br />Leaving those directories will lead to problems during compilation.<br /><br />Unless you know exactly what you're doing, it is recommended that you click Yes.",
+                                     +QObject::tr("Would you like Red Panda C++ to remove them for you and add the default paths to the valid paths?")
+                                     +"<br /><br />"
+                                     +QObject::tr("Leaving those directories will lead to problems during compilation.<br /><br />Unless you know exactly what you're doing, it is recommended that you click Yes."),
                                      QMessageBox::Yes | QMessageBox::No) != QMessageBox::Yes) {
                 return;
             }
@@ -2530,6 +2567,7 @@ void Settings::CompilerSets::saveSet(int index)
     mSettings->mSettings.setValue("Name", pSet->name());
     mSettings->mSettings.setValue("Target", pSet->target());
     mSettings->mSettings.setValue("CompilerType", pSet->compilerType());
+    mSettings->mSettings.setValue("CompilerSetType", pSet->compilerSetType());
 
     // Paths
     savePathList("Bins",pSet->binDirs());
@@ -2592,6 +2630,7 @@ Settings::PCompilerSet Settings::CompilerSets::loadSet(int index)
     pSet->setName(mSettings->mSettings.value("Name").toString());
     pSet->setTarget(mSettings->mSettings.value("Target").toString());
     pSet->setCompilerType(mSettings->mSettings.value("CompilerType").toString());
+    pSet->setCompilerSetType(mSettings->mSettings.value("CompilerSetType").toInt());
 
     // Paths
     loadPathList("Bins",pSet->binDirs());
@@ -2739,6 +2778,36 @@ void Settings::Executor::setInputFilename(const QString &newInputFilename)
     mInputFilename = newInputFilename;
 }
 
+int Settings::Executor::competivieCompanionPort() const
+{
+    return mCompetivieCompanionPort;
+}
+
+void Settings::Executor::setCompetivieCompanionPort(int newCompetivieCompanionPort)
+{
+    mCompetivieCompanionPort = newCompetivieCompanionPort;
+}
+
+bool Settings::Executor::enableCompetitiveCompanion() const
+{
+    return mEnableCompetitiveCompanion;
+}
+
+void Settings::Executor::setEnableCompetitiveCompanion(bool newEnableCompetitiveCompanion)
+{
+    mEnableCompetitiveCompanion = newEnableCompetitiveCompanion;
+}
+
+bool Settings::Executor::enableProblemSet() const
+{
+    return mEnableProblemSet;
+}
+
+void Settings::Executor::setEnableProblemSet(bool newEnableProblemSet)
+{
+    mEnableProblemSet = newEnableProblemSet;
+}
+
 void Settings::Executor::doSave()
 {
     saveValue("pause_console", mPauseConsole);
@@ -2747,6 +2816,8 @@ void Settings::Executor::doSave()
     saveValue("params",mParams);
     saveValue("redirect_input",mRedirectInput);
     saveValue("input_filename",mInputFilename);
+    //problem set
+
 }
 
 bool Settings::Executor::pauseConsole() const
@@ -2768,6 +2839,9 @@ void Settings::Executor::doLoad()
     mRedirectInput = boolValue("redirect_input",false);
     mInputFilename = stringValue("input_filename","");
 
+    mEnableProblemSet = boolValue("enable_proble_set",true);
+    mEnableCompetitiveCompanion = boolValue("enable_competivie_companion",true);
+    mCompetivieCompanionPort = intValue("competitive_companion_port",10045);
 }
 
 

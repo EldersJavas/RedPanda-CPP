@@ -1,12 +1,14 @@
-QT       += core gui printsupport
+QT       += core gui printsupport network svg
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
 CONFIG += c++17
 CONFIG += nokey
 
-QMAKE_CXXFLAGS_RELEASE += -Werror=return-type
-QMAKE_CXXFLAGS_DEBUG += -Werror=return-type
+gcc {
+    QMAKE_CXXFLAGS_RELEASE += -Werror=return-type
+    QMAKE_CXXFLAGS_DEBUG += -Werror=return-type
+}
 
 # You can make your code fail to compile if it uses deprecated APIs.
 # In order to do so, uncomment the following line.
@@ -20,7 +22,9 @@ SOURCES += \
     codeformatter.cpp \
     codesnippetsmanager.cpp \
     colorscheme.cpp \
+    compiler/ojproblemcasesrunner.cpp \
     compiler/projectcompiler.cpp \
+    compiler/runner.cpp \
     platform.cpp \
     compiler/compiler.cpp \
     compiler/compilermanager.cpp \
@@ -33,6 +37,8 @@ SOURCES += \
     parser/cpptokenizer.cpp \
     parser/parserutils.cpp \
     parser/statementmodel.cpp \
+    problems/ojproblemset.cpp \
+    problems/problemcasevalidator.cpp \
     project.cpp \
     projectoptions.cpp \
     projecttemplate.cpp \
@@ -50,6 +56,7 @@ SOURCES += \
     settingsdialog/environmentfileassociationwidget.cpp \
     settingsdialog/environmentfolderswidget.cpp \
     settingsdialog/environmentshortcutwidget.cpp \
+    settingsdialog/executorproblemsetwidget.cpp \
     settingsdialog/formattergeneralwidget.cpp \
     settingsdialog/projectcompileparamaterswidget.cpp \
     settingsdialog/projectcompilerwidget.cpp \
@@ -121,6 +128,8 @@ SOURCES += \
     widgets/labelwithmenu.cpp \
     widgets/macroinfomodel.cpp \
     widgets/newprojectdialog.cpp \
+    widgets/ojproblempropertywidget.cpp \
+    widgets/ojproblemsetmodel.cpp \
     widgets/qconsole.cpp \
     widgets/qpatchedcombobox.cpp \
     widgets/searchdialog.cpp \
@@ -139,7 +148,9 @@ HEADERS += \
     compiler/compilermanager.h \
     compiler/executablerunner.h \
     compiler/filecompiler.h \
+    compiler/ojproblemcasesrunner.h \
     compiler/projectcompiler.h \
+    compiler/runner.h \
     compiler/stdincompiler.h \
     cpprefacter.h \
     parser/cppparser.h \
@@ -148,6 +159,8 @@ HEADERS += \
     parser/parserutils.h \
     parser/statementmodel.h \
     platform.h \
+    problems/ojproblemset.h \
+    problems/problemcasevalidator.h \
     project.h \
     projectoptions.h \
     projecttemplate.h \
@@ -164,6 +177,7 @@ HEADERS += \
     settingsdialog/environmentfileassociationwidget.h \
     settingsdialog/environmentfolderswidget.h \
     settingsdialog/environmentshortcutwidget.h \
+    settingsdialog/executorproblemsetwidget.h \
     settingsdialog/formattergeneralwidget.h \
     settingsdialog/projectcompileparamaterswidget.h \
     settingsdialog/projectcompilerwidget.h \
@@ -236,6 +250,8 @@ HEADERS += \
     widgets/labelwithmenu.h \
     widgets/macroinfomodel.h \
     widgets/newprojectdialog.h \
+    widgets/ojproblempropertywidget.h \
+    widgets/ojproblemsetmodel.h \
     widgets/qconsole.h \
     widgets/qpatchedcombobox.h \
     widgets/searchdialog.h \
@@ -252,6 +268,7 @@ FORMS += \
     settingsdialog/environmentfileassociationwidget.ui \
     settingsdialog/environmentfolderswidget.ui \
     settingsdialog/environmentshortcutwidget.ui \
+    settingsdialog/executorproblemsetwidget.ui \
     settingsdialog/formattergeneralwidget.ui \
     settingsdialog/projectcompileparamaterswidget.ui \
     settingsdialog/projectcompilerwidget.ui \
@@ -281,6 +298,7 @@ FORMS += \
     widgets/custommakefileinfodialog.ui \
     widgets/filepropertiesdialog.ui \
     widgets/newprojectdialog.ui \
+    widgets/ojproblempropertywidget.ui \
     widgets/searchdialog.ui
 
 TRANSLATIONS += \
@@ -300,10 +318,3 @@ RESOURCES += \
     translations.qrc
 
 RC_ICONS = images/devcpp.ico images/associations/c.ico images/associations/cpp.ico images/associations/h.ico images/associations/hpp.ico images/associations/dev.ico
-
-#win32:CONFIG(release, debug|release): LIBS += -L$$OUT_PWD/../../QScintilla/src/release/ -lqscintilla2_qt5d
-#else:win32:CONFIG(debug, debug|release): LIBS += -L$$OUT_PWD/../../QScintilla/src/debug/ -lqscintilla2_qt5d
-#else:unix: LIBS += -L$$OUT_PWD/../../QScintilla/src/ -lqscintilla2_qt5d
-
-#INCLUDEPATH += $$PWD/../../QScintilla/src
-#DEPENDPATH += $$PWD/../../QScintilla/src

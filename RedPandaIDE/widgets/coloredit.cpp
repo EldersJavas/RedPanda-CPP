@@ -23,7 +23,7 @@ void ColorEdit::setColor(const QColor &value)
         mColor=value;
         emit colorChanged(value);
         resize(sizeHint());
-//        update();
+        repaint();
     }
 }
 
@@ -52,7 +52,7 @@ QSize ColorEdit::sizeHint() const
 {
     QRect rect;
     if (mColor.isValid() )
-        rect = fontMetrics().boundingRect(mColor.name());
+        rect = fontMetrics().boundingRect(mColor.name(QColor::HexArgb));
     else
         rect = fontMetrics().boundingRect(tr("NONE"));
     return QSize{rect.width()+ 10,
@@ -73,7 +73,7 @@ void ColorEdit::paintEvent(QPaintEvent *)
             painter.setBrush(palette().color(QPalette::Disabled,QPalette::Base));
         }
         painter.drawRect(rect);
-        painter.drawText(rect,Qt::AlignCenter, mColor.name());
+        painter.drawText(rect,Qt::AlignCenter, mColor.name(QColor::HexArgb));
     } else {
         //painter.fillRect(rect,palette().color(QPalette::Base));
         if (isEnabled()) {
@@ -92,7 +92,8 @@ void ColorEdit::paintEvent(QPaintEvent *)
 
 void ColorEdit::mouseReleaseEvent(QMouseEvent *)
 {
-    QColor c = QColorDialog::getColor();
+    QColor c = QColorDialog::getColor(mColor,nullptr,tr("Color"),
+                                      QColorDialog::ShowAlphaChannel | QColorDialog::DontUseNativeDialog);
     if (c.isValid()) {
         setColor(c);
     }

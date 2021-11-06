@@ -31,15 +31,18 @@ PSearchResults SearchResultModel::addSearchResults(const QString &keyword, SynSe
     return results;
 }
 
-PSearchResults SearchResultModel::addSearchResults(const QString &keyword, const QString &filename, int symbolLine)
+PSearchResults SearchResultModel::addSearchResults(
+        const QString& keyword,
+        const QString& symbolFullname,
+        SearchFileScope scope)
 {
     int index=-1;
     for (int i=0;i<mSearchResults.size();i++) {
         PSearchResults results = mSearchResults[i];
         if (results->searchType == SearchType::FindOccurences
-                && results->keyword == keyword
-                && results->filename == filename
-                && results->symbolLine == symbolLine) {
+                && results->scope == scope
+                && results->statementFullname == symbolFullname
+                ) {
             index=i;
             break;
         }
@@ -52,9 +55,10 @@ PSearchResults SearchResultModel::addSearchResults(const QString &keyword, const
     }
     PSearchResults results = std::make_shared<SearchResults>();
     results->keyword = keyword;
-    results->filename = filename;
-    results->symbolLine = symbolLine;
+    results->statementFullname = symbolFullname;
+    results->filename = "";
     results->searchType = SearchType::FindOccurences;
+    results->scope = scope;
     mSearchResults.push_front(results);
     mCurrentIndex = 0;
     return results;
@@ -208,7 +212,8 @@ QVariant SearchResultTreeModel::data(const QModelIndex &index, int role) const
          }
 
          if (item->parent==nullptr) { //is filename
-             return item->filename;
+             return QString("%1(%2)").arg(item->filename)
+                     .arg(item->results.count());
          } else {
              return QString("%1 %2: %3").arg(tr("Line")).arg(item->line)
                  .arg(item->text);
@@ -317,22 +322,22 @@ bool SearchResultTreeModel::selectable() const
 void SearchResultTreeModel::setSelectable(bool newSelectable)
 {
     if (newSelectable!=mSelectable) {
-        beginResetModel();
         mSelectable = newSelectable;
-        if (mSelectable) {
-            //select all items by default
-            PSearchResults results = mSearchResultModel->currentResults();
-            if (results) {
-                foreach (const PSearchResultTreeItem& file, results->results) {
-                    file->selected = false;
-                    foreach (const PSearchResultTreeItem& item, file->results) {
-                        item->selected = true;
-                    }
+    }
+    beginResetModel();
+    if (mSelectable) {
+        //select all items by default
+        PSearchResults results = mSearchResultModel->currentResults();
+        if (results) {
+            foreach (const PSearchResultTreeItem& file, results->results) {
+                file->selected = false;
+                foreach (const PSearchResultTreeItem& item, file->results) {
+                    item->selected = true;
                 }
             }
         }
-        endResetModel();
     }
+    endResetModel();
 }
 
 SearchResultListModel::SearchResultListModel(SearchResultModel *model, QObject *parent):
@@ -366,10 +371,13 @@ QVariant SearchResultListModel::data(const QModelIndex &index, int role) const
                 return tr("Open Files:") + QString(" \"%1\"").arg(results->keyword);
             }
         } else if (results->searchType == SearchType::FindOccurences) {
-            return tr("References to symbol \'%1\' at '%2':%3")
-                    .arg(results->keyword)
-                    .arg(extractFileName(results->filename))
-                    .arg(results->symbolLine);
+            if (results->scope == SearchFileScope::currentFile) {
+                return tr("Find Usages in Current File: '%1'")
+                    .arg(results->keyword);
+            } else {
+                return tr("Find Usages in Project: '%1'")
+                    .arg(results->keyword);
+            }
         }
     }
     return QVariant();
@@ -413,7 +421,8 @@ void SearchResultTreeViewDelegate::paint(QPainter *painter, const QStyleOptionVi
 
      QString fullText;
      if (item->parent==nullptr) { //is filename
-         fullText = item->filename;
+         fullText = QString("%1(%2)").arg(item->filename)
+                     .arg(item->results.count());
      } else {
          fullText = QString("%1 %2: %3").arg(tr("Line")).arg(item->line)
              .arg(item->text);

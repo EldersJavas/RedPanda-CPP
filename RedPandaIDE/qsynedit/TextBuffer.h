@@ -22,8 +22,6 @@ struct SynEditStringRec {
   QString fString;
   void * fObject;
   SynRangeState fRange;
-  int fLeftBraces;
-  int fRightBraces;
   int fColumns;  //
 
 public:
@@ -59,8 +57,8 @@ public:
     int rightBraces(int Index);
     int lengthOfLongestLine();
     QString lineBreak() const;
-    const SynRangeState& ranges(int Index);
-    void setRange(int Index, const SynRangeState& ARange, int leftBraces, int rightBraces);
+    SynRangeState ranges(int Index);
+    void setRange(int Index, const SynRangeState& ARange);
     QString getString(int Index);
     int count();
     void* getObject(int Index);
@@ -88,7 +86,8 @@ public:
     void insertStrings(int Index, const QStringList& NewStrings);
     void insertText(int Index,const QString& NewText);
     void loadFromFile(const QString& filename, const QByteArray& encoding, QByteArray& realEncoding);
-    void saveToFile(QFile& file, const QByteArray& encoding, QByteArray& realEncoding);
+    void saveToFile(QFile& file, const QByteArray& encoding,
+                    const QByteArray& defaultEncoding, QByteArray& realEncoding);
 
     bool getAppendNewLineAtEOF();
     void setAppendNewLineAtEOF(bool appendNewLineAtEOF);

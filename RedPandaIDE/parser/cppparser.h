@@ -36,6 +36,7 @@ public:
                             int line);
     int findLastOperator(const QString& phrase) const;
     PStatementList findNamespace(const QString& name); // return a list of PSTATEMENTS (of the namespace)
+    PStatement findStatement(const QString& fullname);
     PStatement findStatementOf(const QString& fileName,
                                const QString& phrase,
                                int line);
@@ -369,6 +370,8 @@ private:
 
     QRecursiveMutex mMutex;
     GetFileStreamCallBack mOnGetFileStream;
+    QMap<QString,SkipType> mCppKeywords;
+    QSet<QString> mCppTypeKeywords;
 };
 using PCppParser = std::shared_ptr<CppParser>;
 

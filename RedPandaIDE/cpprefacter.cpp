@@ -5,6 +5,7 @@
 #include "editorlist.h"
 #include <QFile>
 #include <QMessageBox>
+#include <QTextCodec>
 #include "HighlighterManager.h"
 #include "project.h"
 
@@ -15,6 +16,8 @@ CppRefacter::CppRefacter(QObject *parent) : QObject(parent)
 
 bool CppRefacter::findOccurence(Editor *editor, const BufferCoord &pos)
 {
+    if (!editor->parser())
+        return false;
     if (!editor->parser()->freeze())
         return false;
     auto action = finally([&editor]{
@@ -34,26 +37,50 @@ bool CppRefacter::findOccurence(Editor *editor, const BufferCoord &pos)
 
     std::shared_ptr<Project> project = pMainWindow->project();
     if (editor->inProject() && project) {
-        foreach (const PProjectUnit& unit, project->units()) {
-            if (isCfile(unit->fileName()) || isHfile(unit->fileName())) {
-                findOccurenceInFile(
-                        phrase,
-                        unit->fileName(),
-                        statement,
-                        pos.Line,
-                        editor->parser());
-            }
-        }
+        doFindOccurenceInProject(statement,project,editor->parser());
     } else {
-        findOccurenceInFile(
-                    phrase,
-                    editor->filename(),
-                    statement,
-                    pos.Line,
-                    editor->parser());
+        doFindOccurenceInEditor(statement,editor,editor->parser());
     }
     pMainWindow->searchResultModel()->notifySearchResultsUpdated();
     return true;
+}
+
+bool CppRefacter::findOccurence(const QString &statementFullname, SearchFileScope scope)
+{
+    PCppParser parser;
+    Editor * editor;
+    std::shared_ptr<Project> project;
+    if (scope == SearchFileScope::currentFile) {
+        editor = pMainWindow->editorList()->getEditor();
+        if (!editor)
+            return false;
+        parser = editor->parser();
+    } else if (scope == SearchFileScope::wholeProject) {
+        project = pMainWindow->project();
+        if (!project)
+            return false;
+        parser = project->cppParser();
+    }
+    if (!parser)
+        return false;
+    {
+        parser->freeze();
+        auto action = finally([&parser]{
+            parser->unFreeze();
+        });
+        PStatement statement = parser->findStatement(statementFullname);
+        // definition of the symbol not found
+        if (!statement)
+            return false;
+
+        if (scope == SearchFileScope::wholeProject) {
+            doFindOccurenceInProject(statement,project,parser);
+        } else if (scope == SearchFileScope::currentFile) {
+            doFindOccurenceInEditor(statement, editor,parser);
+        }
+        pMainWindow->searchResultModel()->notifySearchResultsUpdated();
+        return true;
+    }
 }
 
 static QString fullParentName(PStatement statement) {
@@ -104,6 +131,42 @@ void CppRefacter::renameSymbol(Editor *editor, const BufferCoord &pos, const QSt
         return;
     }
     renameSymbolInFile(editor->filename(),oldStatement,newWord, editor->parser());
+}
+
+void CppRefacter::doFindOccurenceInEditor(PStatement statement , Editor *editor, const PCppParser &parser)
+{
+    PSearchResults results = pMainWindow->searchResultModel()->addSearchResults(
+                statement->command,
+                statement->fullName,
+                SearchFileScope::currentFile
+                );
+    PSearchResultTreeItem item = findOccurenceInFile(
+                editor->filename(),
+                statement,
+                parser);
+    if (item && !(item->results.isEmpty())) {
+        results->results.append(item);
+    }
+}
+
+void CppRefacter::doFindOccurenceInProject(PStatement statement, std::shared_ptr<Project> project, const PCppParser &parser)
+{
+    PSearchResults results = pMainWindow->searchResultModel()->addSearchResults(
+                statement->command,
+                statement->fullName,
+                SearchFileScope::wholeProject
+                );
+    foreach (const PProjectUnit& unit, project->units()) {
+        if (isCfile(unit->fileName()) || isHfile(unit->fileName())) {
+            PSearchResultTreeItem item = findOccurenceInFile(
+                        unit->fileName(),
+                        statement,
+                        parser);
+            if (item && !(item->results.isEmpty())) {
+                results->results.append(item);
+            }
+        }
+    }
 }
 
 PSearchResultTreeItem CppRefacter::findOccurenceInFile(
@@ -235,28 +298,8 @@ void CppRefacter::renameSymbolInFile(const QString &filename, const PStatement &
     } else {
         QByteArray realEncoding;
         QFile file(filename);
-        editor.lines()->saveToFile(file,ENCODING_AUTO_DETECT, realEncoding);
-    }
-}
-
-void CppRefacter::findOccurenceInFile(
-        const QString& phrase,
-        const QString &filename,
-        const PStatement &statement,
-        int line,
-        const PCppParser &parser)
-{
-    PSearchResults results = pMainWindow->searchResultModel()->addSearchResults(
-                phrase,
-                filename,
-                line
-                );
-
-    PSearchResultTreeItem item = findOccurenceInFile(
-                filename,
-                statement,
-                parser);
-    if (item && !(item->results.isEmpty())) {
-        results->results.append(item);
+        editor.lines()->saveToFile(file,ENCODING_AUTO_DETECT,
+                                   pSettings->editor().useUTF8ByDefault()? ENCODING_UTF8 : QTextCodec::codecForLocale()->name(),
+                                   realEncoding);
     }
 }

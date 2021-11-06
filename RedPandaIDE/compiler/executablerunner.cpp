@@ -7,24 +7,51 @@
 #include "../settings.h"
 #include "../systemconsts.h"
 
-ExecutableRunner::ExecutableRunner(const QString &filename, const QString &arguments, const QString &workDir):
-    QThread(),
-    mFilename(filename),
-    mArguments(arguments),
-    mWorkDir(workDir),
-    mStop(false)
+ExecutableRunner::ExecutableRunner(const QString &filename, const QString &arguments, const QString &workDir
+                                   ,QObject* parent):
+    Runner(filename,arguments,workDir,parent),
+    mRedirectInput(false),
+    mStartConsole(false)
 {
 
 }
 
-void ExecutableRunner::stop()
+bool ExecutableRunner::startConsole() const
 {
-    mStop = true;
+    return mStartConsole;
+}
+
+void ExecutableRunner::setStartConsole(bool newStartConsole)
+{
+    mStartConsole = newStartConsole;
+}
+
+bool ExecutableRunner::redirectInput() const
+{
+    return mRedirectInput;
+}
+
+void ExecutableRunner::setRedirectInput(bool isRedirect)
+{
+    mRedirectInput = isRedirect;
+}
+
+const QString &ExecutableRunner::redirectInputFilename() const
+{
+    return mRedirectInputFilename;
+}
+
+void ExecutableRunner::setRedirectInputFilename(const QString &newDataFile)
+{
+    mRedirectInputFilename = newDataFile;
 }
 
 void ExecutableRunner::run()
 {
     emit started();
+    auto action = finally([this]{
+        emit terminated();
+    });
     QProcess process;
     mStop = false;
     bool errorOccurred = false;
@@ -48,9 +75,13 @@ void ExecutableRunner::run()
     }
     env.insert("PATH",path);
     process.setProcessEnvironment(env);
-    process.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments * args){
-        args->flags |= CREATE_NEW_CONSOLE;
-        args->startupInfo -> dwFlags &= ~STARTF_USESTDHANDLES;
+    process.setCreateProcessArgumentsModifier([this](QProcess::CreateProcessArguments * args){
+        if (mStartConsole) {
+            args->flags |= CREATE_NEW_CONSOLE;
+        }
+        if (!mRedirectInput) {
+            args->startupInfo -> dwFlags &= ~STARTF_USESTDHANDLES;
+        }
     });
     process.connect(&process, &QProcess::errorOccurred,
                     [&](){
@@ -58,9 +89,15 @@ void ExecutableRunner::run()
                     });
 //    qDebug() << mFilename;
 //    qDebug() << QProcess::splitCommand(mArguments);
+    if (!redirectInput()) {
+        process.closeWriteChannel();
+    }
     process.start();
-    process.closeWriteChannel();
     process.waitForStarted(5000);
+    if (process.state()==QProcess::Running && redirectInput()) {
+        process.write(ReadFileToByteArray(redirectInputFilename()));
+        process.closeWriteChannel();
+    }
     while (true) {
         process.waitForFinished(1000);
         if (process.state()!=QProcess::Running) {
@@ -100,5 +137,4 @@ void ExecutableRunner::run()
             break;
         }
     }
-    emit terminated();
 }

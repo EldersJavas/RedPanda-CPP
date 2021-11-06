@@ -15,6 +15,7 @@
 #include <windows.h>
 #include <QStyleFactory>
 #include <QDateTime>
+#include <QColor>
 #include "parser/cppparser.h"
 #include "settings.h"
 #include "mainwindow.h"
@@ -88,17 +89,26 @@ bool isTextAllAscii(const QString& text) {
 }
 
 
-static bool gIsGreenEdition = false;
+static bool gIsGreenEdition = true;
 static bool gIsGreenEditionInited = false;
 bool isGreenEdition()
 {
     if (!gIsGreenEditionInited) {
-        QSettings settings("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\RedPanda-C++",
-                           QSettings::NativeFormat);
-        QString regPath = QFileInfo(settings.value("UninstallString").toString()).absolutePath();
+        QString keyString = QString("Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\RedPanda-C++");
+        QString value;
+        if (!readRegistry(HKEY_LOCAL_MACHINE,keyString.toLocal8Bit(),"UninstallString",value)) {
+            keyString = "SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\RedPanda-C++";
+            if (!readRegistry(HKEY_LOCAL_MACHINE,keyString.toLocal8Bit(),"UninstallString",value)) {
+                value="";
+            }
+        }
+        if (!value.isEmpty()) {
+            QString regPath = extractFileDir(value);
 
-        QString appPath = QApplication::instance()->applicationDirPath();
-        gIsGreenEdition = (regPath != appPath);
+            QString appPath = QApplication::instance()->applicationDirPath();
+            gIsGreenEdition = excludeTrailingPathDelimiter(regPath).compare(excludeTrailingPathDelimiter(appPath),
+                                                                            Qt::CaseInsensitive)!=0;
+        }
         gIsGreenEditionInited = true;
     }
     return gIsGreenEdition;
@@ -834,4 +844,52 @@ bool removeFile(const QString &filename)
 {
     QFile file(filename);
     return file.remove();
+}
+
+QByteArray ReadFileToByteArray(const QString &fileName)
+{
+    QFile file(fileName);
+    if (file.open(QFile::ReadOnly)) {
+        return file.readAll();
+    }
+    return QByteArray();
+}
+
+QByteArray getHTTPBody(const QByteArray& content) {
+    int i= content.indexOf("\r\n\r\n");
+    if (i>=0) {
+        return content.mid(i+4);
+    }
+    return "";
+}
+
+bool haveGoodContrast(const QColor& c1, const QColor &c2) {
+    int lightness1 = qGray(c1.rgb());
+    int lightness2 = qGray(c2.rgb());
+    return std::abs(lightness1 - lightness2)>=120;
+}
+
+bool readRegistry(HKEY key,const QByteArray& subKey, const QByteArray& name, QString& value) {
+    DWORD dataSize;
+    LONG result;
+    result = RegGetValueA(key,subKey,
+                 name, RRF_RT_REG_SZ | RRF_RT_REG_MULTI_SZ,
+                 NULL,
+                 NULL,
+                 &dataSize);
+    if (result!=ERROR_SUCCESS)
+        return false;
+    char * buffer = new char[dataSize+10];
+    result = RegGetValueA(key,subKey,
+                 name, RRF_RT_REG_SZ | RRF_RT_REG_MULTI_SZ,
+                 NULL,
+                 buffer,
+                 &dataSize);
+    if (result!=ERROR_SUCCESS) {
+        delete[] buffer;
+        return false;
+    }
+    value=QString::fromLocal8Bit(buffer);
+    delete [] buffer;
+    return true;
 }

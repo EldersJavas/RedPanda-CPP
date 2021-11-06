@@ -20,7 +20,6 @@
 #include <QFileIconProvider>
 #include <QMimeData>
 #include "settings.h"
-#include <QDebug>
 
 Project::Project(const QString &filename, const QString &name, QObject *parent) :
     QObject(parent),
@@ -615,6 +614,14 @@ PFolderNode Project::pointerToNode(FolderNode *p, PFolderNode parent)
     return PFolderNode();
 }
 
+void Project::setCompilerSet(int compilerSetIndex)
+{
+    if (mOptions.compilerSet != compilerSetIndex) {
+        mOptions.compilerSet = compilerSetIndex;
+        updateCompilerSetType();
+    }
+}
+
 bool Project::assignTemplate(const std::shared_ptr<ProjectTemplate> aTemplate)
 {
     if (!aTemplate) {
@@ -623,9 +630,7 @@ bool Project::assignTemplate(const std::shared_ptr<ProjectTemplate> aTemplate)
 
     mOptions = aTemplate->options();
     mOptions.compilerSet = pSettings->compilerSets().defaultIndex();
-    if (pSettings->compilerSets().defaultSet()) {
-        mOptions.compilerOptions = pSettings->compilerSets().defaultSet()->iniOptions();
-    }
+    updateCompilerSetType();
     mOptions.icon = aTemplate->icon();
 
     // Copy icon to project directory
@@ -661,8 +666,14 @@ bool Project::assignTemplate(const std::shared_ptr<ProjectTemplate> aTemplate)
                         true);
 
             QString s2 = QDir(pSettings->dirs().templateDir()).absoluteFilePath(s);
-            if (fileExists(s2)) {
-                editor->loadFile(s2);
+            if (fileExists(s2) && !s.isEmpty()) {
+                try {
+                    editor->loadFile(s2);
+                } catch(FileError& e) {
+                    QMessageBox::critical(pMainWindow,
+                                          tr("Error Load File"),
+                                          e.reason());
+                }
             } else {
                 s.replace("#13#10","\r\n");
                 editor->insertString(s,false);
@@ -710,6 +721,7 @@ void Project::saveOptions()
     ini.SetLongValue("Project","IncludeVersionInfo", mOptions.includeVersionInfo);
     ini.SetLongValue("Project","SupportXPThemes", mOptions.supportXPThemes);
     ini.SetLongValue("Project","CompilerSet", mOptions.compilerSet);
+    ini.SetLongValue("Project","CompilerSetType", mOptions.compilerSetType);
     ini.SetValue("Project","CompilerSettings", mOptions.compilerOptions);
     ini.SetLongValue("Project","StaticLink", mOptions.staticLink);
     ini.SetLongValue("Project","AddCharset", mOptions.addCharset);
@@ -1359,11 +1371,25 @@ void Project::loadOptions(SimpleIni& ini)
                         QMessageBox::Ok
                                   );
             mOptions.compilerSet = pSettings->compilerSets().defaultIndex();
+            int compilerSetType = ini.GetLongValue("Project","CompilerSetType",-1);
+            if (compilerSetType>=0) {
+                for (int i=0;i<pSettings->compilerSets().size();i++) {
+                    Settings::PCompilerSet pSet = pSettings->compilerSets().getSet(i);
+                    if (pSet && pSet->compilerSetType() == compilerSetType) {
+                        mOptions.compilerSet = i;
+                        break;
+                    }
+                }
+            }
             setModified(true);
         }
         mOptions.compilerOptions = ini.GetValue("Project", "CompilerSettings", "");
         mOptions.staticLink = ini.GetBoolValue("Project", "StaticLink", true);
         mOptions.addCharset = ini.GetBoolValue("Project", "AddCharset", true);
+
+        if (mOptions.compilerSetType<0) {
+            updateCompilerSetType();
+        }
         bool useUTF8 = ini.GetBoolValue("Project", "UseUTF8", false);
         if (useUTF8) {
             mOptions.encoding = fromByteArray(ini.GetValue("Project","Encoding", ENCODING_UTF8));
@@ -1507,6 +1533,19 @@ void Project::updateFolderNode(PFolderNode node)
             mFolders.append(getFolderPath(child));
             updateFolderNode(child);
         }
+    }
+}
+
+void Project::updateCompilerSetType()
+{
+    Settings::PCompilerSet defaultSet = pSettings->compilerSets().getSet(mOptions.compilerSet);
+    if (defaultSet) {
+        mOptions.compilerSetType=defaultSet->compilerSetType();
+        mOptions.staticLink = defaultSet->staticLink();
+        mOptions.compilerOptions = defaultSet->iniOptions();
+    } else {
+        mOptions.compilerSetType=CST_DEBUG;
+        mOptions.staticLink = false;
     }
 }
 
@@ -1719,7 +1758,7 @@ bool ProjectUnit::save()
         // file is neither open, nor saved
         QStringList temp;
         StringsToFile(temp,mFileName);
-    } else if (mEditor and modified()) {
+    } else if (mEditor && mEditor->modified()) {
         result = mEditor->save();
     }
     if (mNode) {

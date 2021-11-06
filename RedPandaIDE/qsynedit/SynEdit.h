@@ -40,10 +40,11 @@ enum SynStatusChange {
     scLeftChar = 0x0008,
     scTopLine = 0x0010,
     scInsertMode = 0x0020,
-    scModified = 0x0040,
+    scModifyChanged = 0x0040,
     scSelection = 0x0080,
     scReadOnly = 0x0100,
-    scOpenFile = 0x0200
+    scOpenFile = 0x0200,
+    scModified = 0x0400
 };
 
 Q_DECLARE_FLAGS(SynStatusChanges, SynStatusChange)
@@ -65,8 +66,8 @@ Q_DECLARE_OPERATORS_FOR_FLAGS(SynStateFlags)
 
 enum SynEditorOption {
   eoAltSetsColumnMode = 0x00000001, //Holding down the Alt Key will put the selection mode into columnar format
-  eoAutoIndent =        0x00000002, //Will indent the caret on new lines with the same amount of leading white space as the preceding line
-  eoAddIndent =         0x00000004, //Will add one tab width of indent when typing { and :, and remove the same amount when typing }
+  eoAutoIndent =        0x00000002, //Will auto calculate the indent when input
+//  eoAddIndent =         0x00000004, //Will add one tab width of indent when typing { and :, and remove the same amount when typing }
   eoDragDropEditing =   0x00000008, //Allows you to select a block of text and drag it within the document to another location
   eoDropFiles =         0x00000010, //Allows the editor accept OLE file drops
   eoEnhanceHomeKey =    0x00000020, //enhances home key positioning, similar to visual studio
@@ -80,7 +81,7 @@ enum SynEditorOption {
   eoScrollPastEof =     0x00002000, //Allows the cursor to go past the end of file marker
   eoScrollPastEol =     0x00004000, //Allows the cursor to go past the last character into the white space at the end of a line
   eoShowSpecialChars =  0x00008000, //Shows the special Characters
-  eoSpecialLineDefaultFg = 0x00010000, //disables the foreground text color override when using the OnSpecialLineColor event
+//  eoSpecialLineDefaultFg = 0x00010000, //disables the foreground text color override when using the OnSpecialLineColor event
   eoTabIndent =         0x00020000, //When active <Tab> and <Shift><Tab> act as block indent, unindent when text is selected
   eoTabsToSpaces =      0x00040000, //Converts a tab character to a specified number of space characters
   eoShowRainbowColor =  0x00080000,
@@ -376,6 +377,12 @@ public:
     int mouseWheelScrollSpeed() const;
     void setMouseWheelScrollSpeed(int newMouseWheelScrollSpeed);
 
+    const QColor &foregroundColor() const;
+    void setForegroundColor(const QColor &newForegroundColor);
+
+    const QColor &backgroundColor() const;
+    void setBackgroundColor(const QColor &newBackgroundColor);
+
 signals:
     void linesDeleted(int FirstLine, int Count);
     void linesInserted(int FirstLine, int Count);
@@ -455,14 +462,15 @@ private:
     QString expandAtWideGlyphs(const QString& S);
     void updateModifiedStatus();
     int scanFrom(int Index, int canStopIndex);
-    void scanRanges();
+    void rescanRange(int line);
+    void rescanRanges();
     void uncollapse(PSynEditFoldRange FoldRange);
     void collapse(PSynEditFoldRange FoldRange);
 
     void foldOnListInserted(int Line, int Count);
     void foldOnListDeleted(int Line, int Count);
     void foldOnListCleared();
-    void rescan(); // rescan for folds
+    void rescanFolds(); // rescan for folds
     void rescanForFoldRanges();
     void scanForFoldRanges(PSynEditFoldRanges TopFoldRanges);
     int lineHasChar(int Line, int startChar, QChar character, const QString& highlighterAttrName);
@@ -506,11 +514,14 @@ private:
     void setSelWord();
     void setWordBlock(BufferCoord Value);
 
+    int calcIndentSpaces(int line, const QString& lineText, bool addIndent);
+
 
     void processGutterClick(QMouseEvent* event);
 
     void clearUndo();
-    BufferCoord getPreviousLeftBracket(int x,int y);
+    int findIndentsStartLine(int line, QVector<int> indents);
+    BufferCoord getPreviousLeftBrace(int x,int y);
     bool canDoBlockIndent();
 
     QRect calculateCaretRect();
@@ -606,6 +617,8 @@ private:
     PSynHighlighter mHighlighter;
     QColor mSelectedForeground;
     QColor mSelectedBackground;
+    QColor mForegroundColor;
+    QColor mBackgroundColor;
     QColor mCaretColor;
     PSynHighlighterAttribute mRainbowAttr0;
     PSynHighlighterAttribute mRainbowAttr1;

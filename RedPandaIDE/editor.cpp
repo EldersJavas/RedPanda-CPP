@@ -27,6 +27,7 @@
 #include <QPrinter>
 #include <QPrintDialog>
 #include <QTextDocument>
+#include <QTextCodec>
 #include "iconsmanager.h"
 #include "debugger.h"
 #include "editorlist.h"
@@ -73,10 +74,11 @@ Editor::Editor(QWidget *parent, const QString& filename,
   mLastIdCharPressed(0),
   mCurrentWord(),
   mCurrentTipType(TipType::None),
-  mOldSelectionWord(),
-  mSelectionWord(),
+  mOldHighlightedWord(),
+  mCurrentHighlightedWord(),
   mSaving(false)
 {
+    mCurrentLineModified = false;
     mUseCppSyntax = pSettings->editor().defaultFileCpp();
     if (mFilename.isEmpty()) {
         mFilename = tr("untitled")+QString("%1").arg(getNewFileNumber());
@@ -204,7 +206,9 @@ void Editor::loadFile(QString filename) {
 
 void Editor::saveFile(QString filename) {
     QFile file(filename);
-    this->lines()->saveToFile(file,mEncodingOption,mFileEncoding);
+    this->lines()->saveToFile(file,mEncodingOption,
+                              pSettings->editor().useUTF8ByDefault()? ENCODING_UTF8 : QTextCodec::codecForLocale()->name(),
+                              mFileEncoding);
     pMainWindow->updateForEncodingInfo();
 }
 
@@ -219,29 +223,27 @@ bool Editor::save(bool force, bool doReparse) {
     if (this->mIsNew && !force) {
         return saveAs();
     }
-    QFileInfo info(mFilename);
     //is this file writable;
-    if (!force && !info.isWritable()) {
-        QMessageBox::critical(pMainWindow,tr("Error"),
-                                 tr("File %1 is not writable!").arg(mFilename));
-        return false;
-    }
-    if (this->modified()|| force) {
-        pMainWindow->fileSystemWatcher()->removePath(mFilename);
-        try {
-            saveFile(mFilename);
-            pMainWindow->fileSystemWatcher()->addPath(mFilename);
-            setModified(false);
-            mIsNew = false;
-            this->updateCaption();
-        }  catch (SaveException& exception) {
-            if (!force) {
-                QMessageBox::critical(pMainWindow,tr("Error"),
-                                     exception.reason());
-            }
-            pMainWindow->fileSystemWatcher()->addPath(mFilename);
-            return false;
+    pMainWindow->fileSystemWatcher()->removePath(mFilename);
+    try {
+//        QFileInfo info(mFilename);
+//        if (!force && !info.isWritable()) {
+//            QMessageBox::critical(pMainWindow,tr("Error"),
+//                                     tr("File %1 is not writable!").arg(mFilename));
+//            return false;
+//        }
+        saveFile(mFilename);
+        pMainWindow->fileSystemWatcher()->addPath(mFilename);
+        setModified(false);
+        mIsNew = false;
+        this->updateCaption();
+    }  catch (SaveException& exception) {
+        if (!force) {
+            QMessageBox::critical(pMainWindow,tr("Error"),
+                                 exception.reason());
         }
+        pMainWindow->fileSystemWatcher()->addPath(mFilename);
+        return false;
     }
 
     if (doReparse && mParser) {
@@ -288,10 +290,11 @@ bool Editor::saveAs(const QString &name, bool fromProject){
             }
         });
 
-        if (!dialog.exec()) {
+        if (dialog.exec()!=QFileDialog::Accepted) {
             return false;
         }
         newName = dialog.selectedFiles()[0];
+        QDir::setCurrent(extractFileDir(newName));
     }
 
     // Update project information
@@ -302,6 +305,7 @@ bool Editor::saveAs(const QString &name, bool fromProject){
         }
     }
 
+    clearSyntaxIssues();
     pMainWindow->fileSystemWatcher()->removePath(mFilename);
     if (pSettings->codeCompletion().enabled() && mParser)
         mParser->invalidateFile(mFilename);
@@ -827,15 +831,14 @@ void Editor::onGetEditingAreas(int Line, SynEditingAreaList &areaList)
 bool Editor::onGetSpecialLineColors(int Line, QColor &foreground, QColor &backgroundColor)
 {
     if (Line == mActiveBreakpointLine &&
-            mActiveBreakpointForegroundColor.isValid()
-            && mActiveBreakpointBackgroundColor.isValid()) {
-        foreground = mActiveBreakpointForegroundColor;
+        mActiveBreakpointBackgroundColor.isValid()) {
+        if (mActiveBreakpointForegroundColor.isValid())
+            foreground = mActiveBreakpointForegroundColor;
         backgroundColor = mActiveBreakpointBackgroundColor;
         return true;
-    } else if (hasBreakpoint(Line)  &&
-               mBreakpointForegroundColor.isValid()
-               && mBreakpointBackgroundColor.isValid()) {
-        foreground = mBreakpointForegroundColor;
+    } else if (hasBreakpoint(Line) && mBreakpointBackgroundColor.isValid()) {
+        if (mBreakpointForegroundColor.isValid())
+            foreground = mBreakpointForegroundColor;
         backgroundColor = mBreakpointBackgroundColor;
         return true;
     }
@@ -853,40 +856,9 @@ void Editor::onPreparePaintHighlightToken(int line, int aChar, const QString &to
 {
     if (token.isEmpty())
         return;
-    //selection
-    if (selAvail() && highlighter()) {
-        if ((
-          (attr == highlighter()->identifierAttribute())
-          || (attr == highlighter()->keywordAttribute())
-          || (attr->name() == SYNS_AttrPreprocessor)
-          )
-          && (token == mSelectionWord)) {
-            foreground = selectedForeground();
-            background = selectedBackground();
-            return;
-        }
-    }
-
-    if (!selAvail() && attr->name() == SYNS_AttrSymbol) {
-//        qDebug()<<line<<":"<<aChar<<" - "<<mHighlightCharPos1.Line<<":"<<mHighlightCharPos1.Char<<" - "<<mHighlightCharPos2.Line<<":"<<mHighlightCharPos2.Char;
-
-        if ( (line == mHighlightCharPos1.Line)
-                && (aChar == mHighlightCharPos1.Char)) {
-            foreground = selectedForeground();
-            background = selectedBackground();
-            return;
-        }
-        if ((line == mHighlightCharPos2.Line)
-                && (aChar == mHighlightCharPos2.Char)) {
-            foreground = selectedForeground();
-            background = selectedBackground();
-            return;
-        }
-    }
-
 
 //    qDebug()<<token<<"-"<<attr->name()<<" - "<<line<<" : "<<aChar;
-    if (mParser && (attr == highlighter()->identifierAttribute())) {
+    if (mParser && highlighter() && (attr == highlighter()->identifierAttribute())) {
         BufferCoord p{aChar,line};
         BufferCoord pBeginPos,pEndPos;
         QString s= getWordAtPosition(this,p, pBeginPos,pEndPos, WordPurpose::wpInformation);
@@ -916,7 +888,43 @@ void Editor::onPreparePaintHighlightToken(int line, int aChar, const QString &to
         } else {
             foreground = highlighter()->identifierAttribute()->foreground();
         }
-        return;
+    }
+
+    //selection
+    if (highlighter() && attr) {
+        if (((attr == highlighter()->identifierAttribute())
+                || (attr == highlighter()->keywordAttribute())
+                || (attr->name() == SYNS_AttrPreprocessor)
+                )
+            && (token == mCurrentHighlightedWord)) {
+            if (mCurrentHighlighWordForeground.isValid())
+                foreground = mCurrentHighlighWordForeground;
+            if (mCurrentHighlighWordBackground.isValid())
+                background = mCurrentHighlighWordBackground;
+        } else if (!selAvail() && attr->name() == SYNS_AttrSymbol) {
+            //        qDebug()<<line<<":"<<aChar<<" - "<<mHighlightCharPos1.Line<<":"<<mHighlightCharPos1.Char<<" - "<<mHighlightCharPos2.Line<<":"<<mHighlightCharPos2.Char;
+            if ( (line == mHighlightCharPos1.Line)
+                    && (aChar == mHighlightCharPos1.Char)) {
+                if (mCurrentHighlighWordForeground.isValid())
+                    foreground = mCurrentHighlighWordForeground;
+                if (mCurrentHighlighWordBackground.isValid())
+                    background = mCurrentHighlighWordBackground;
+            }
+            if ((line == mHighlightCharPos2.Line)
+                    && (aChar == mHighlightCharPos2.Char)) {
+                if (mCurrentHighlighWordForeground.isValid())
+                    foreground = mCurrentHighlighWordForeground;
+                if (mCurrentHighlighWordBackground.isValid())
+                    background = mCurrentHighlighWordBackground;
+            }
+        }
+    } else {
+        if (token == mCurrentHighlightedWord) {
+            if (mCurrentHighlighWordForeground.isValid())
+                foreground = mCurrentHighlighWordForeground;
+            if (mCurrentHighlighWordBackground.isValid())
+                background = mCurrentHighlighWordBackground;
+        }
     }
 }
 
@@ -1349,24 +1357,28 @@ Editor::PSyntaxIssue Editor::getSyntaxIssueAtPosition(const BufferCoord &pos)
     return PSyntaxIssue();
 }
 
-void Editor::onModificationChanged(bool) {
-    updateCaption();
-}
-
 void Editor::onStatusChanged(SynStatusChanges changes)
 {
-    if (!changes.testFlag(SynStatusChange::scReadOnly)
+    if ((!changes.testFlag(SynStatusChange::scReadOnly)
             && !changes.testFlag(SynStatusChange::scInsertMode)
             && (lines()->count()!=mLineCount)
-            && (lines()->count()!=0) && ((mLineCount>0) || (lines()->count()>1))) {
+            && (lines()->count()!=0) && ((mLineCount>0) || (lines()->count()>1)))
+            ||
+        (mCurrentLineModified
+            && !changes.testFlag(SynStatusChange::scReadOnly)
+            && changes.testFlag(SynStatusChange::scCaretY))) {
+        mCurrentLineModified = false;
         reparse();
         if (pSettings->editor().syntaxCheckWhenLineChanged())
             checkSyntaxInBack();
         reparseTodo();
     }
     mLineCount = lines()->count();
-    if (changes.testFlag(scModified)) {
+    if (changes.testFlag(scModifyChanged)) {
         updateCaption();
+    }
+    if (changes.testFlag(scModified)) {
+        mCurrentLineModified = true;
     }
 
     if (changes.testFlag(SynStatusChange::scCaretX)
@@ -1434,31 +1446,36 @@ void Editor::onStatusChanged(SynStatusChanges changes)
 
     // scSelection includes anything caret related
     if (changes.testFlag(SynStatusChange::scSelection)) {
-        mSelectionWord="";
-        if (selAvail()) {
-            BufferCoord wordBegin,wordEnd,bb,be;
-            bb = blockBegin();
-            be = blockEnd();
-            wordBegin = wordStartEx(bb);
-            wordEnd = wordEndEx(be);
-            if (wordBegin.Line == bb.Line
-                    && wordBegin.Char == bb.Char
-                    && wordEnd.Line == be.Line
-                    && wordEnd.Char == be.Char) {
-                if (wordBegin.Line>=1 && wordBegin.Line<=lines()->count()) {
-                    QString line = lines()->getString(wordBegin.Line-1);
-                    mSelectionWord = line.mid(wordBegin.Char-1,wordEnd.Char-wordBegin.Char);
-                }
-            }
-//            qDebug()<<QString("(%1,%2)").arg(bb.Line).arg(bb.Char)
-//                   <<" - "<<QString("(%1,%2)").arg(be.Line).arg(be.Char)
-//                  <<" - "<<QString("(%1,%2)").arg(wordBegin.Line).arg(wordBegin.Char)
-//                 <<" - "<<QString("(%1,%2)").arg(wordEnd.Line).arg(wordEnd.Char)
-//                <<" : "<<mSelectionWord;
+        if (!selAvail()) {
+            mCurrentHighlightedWord = wordAtCursor();
+        } else {
+            mCurrentHighlightedWord = "";
         }
-        if (mOldSelectionWord != mSelectionWord) {
+//        mSelectionWord="";
+//        if (selAvail()) {
+//            BufferCoord wordBegin,wordEnd,bb,be;
+//            bb = blockBegin();
+//            be = blockEnd();
+//            wordBegin = wordStartEx(bb);
+//            wordEnd = wordEndEx(be);
+//            if (wordBegin.Line == bb.Line
+//                    && wordBegin.Char == bb.Char
+//                    && wordEnd.Line == be.Line
+//                    && wordEnd.Char == be.Char) {
+//                if (wordBegin.Line>=1 && wordBegin.Line<=lines()->count()) {
+//                    QString line = lines()->getString(wordBegin.Line-1);
+//                    mSelectionWord = line.mid(wordBegin.Char-1,wordEnd.Char-wordBegin.Char);
+//                }
+//            }
+////            qDebug()<<QString("(%1,%2)").arg(bb.Line).arg(bb.Char)
+////                   <<" - "<<QString("(%1,%2)").arg(be.Line).arg(be.Char)
+////                  <<" - "<<QString("(%1,%2)").arg(wordBegin.Line).arg(wordBegin.Char)
+////                 <<" - "<<QString("(%1,%2)").arg(wordEnd.Line).arg(wordEnd.Char)
+////                <<" : "<<mSelectionWord;
+//        }
+        if (mOldHighlightedWord != mCurrentHighlightedWord) {
             invalidate();
-            mOldSelectionWord = mSelectionWord;
+            mOldHighlightedWord = mCurrentHighlightedWord;
         }
         pMainWindow->updateStatusbarForLineCol();
 
@@ -1502,7 +1519,13 @@ void Editor::onGutterClicked(Qt::MouseButton button, int , int , int line)
 void Editor::onTipEvalValueReady(const QString &value)
 {
     if (mCurrentWord == mCurrentDebugTipWord) {
-        QToolTip::showText(QCursor::pos(), mCurrentDebugTipWord + " = " + value );
+        QString newValue;
+        if (value.length()>100) {
+            newValue = value.left(100) + "...";
+        } else {
+            newValue = value;
+        }
+        QToolTip::showText(QCursor::pos(), mCurrentDebugTipWord + " = " + newValue);
     }
     disconnect(pMainWindow->debugger(), &Debugger::evalValueReady,
                this, &Editor::onTipEvalValueReady);
@@ -1899,7 +1922,8 @@ bool Editor::handleCodeCompletion(QChar key)
             showCompletion(false);
         return true;
     case ':':
-        setSelText(key);
+        ExecuteCommand(SynEditorCommand::ecChar,':',nullptr);
+        //setSelText(key);
         if ((caretX() > 2) && (lineText().length() >= 2) &&
                 (lineText()[caretX() - 3] == ':'))
             showCompletion(false);
@@ -3110,6 +3134,16 @@ void Editor::onExportedFormatToken(PSynHighlighter syntaxHighlighter, int Line, 
     }
 }
 
+bool Editor::useCppSyntax() const
+{
+    return mUseCppSyntax;
+}
+
+void Editor::setUseCppSyntax(bool newUseCppSyntax)
+{
+    mUseCppSyntax = newUseCppSyntax;
+}
+
 void Editor::setInProject(bool newInProject)
 {
     if (mInProject == newInProject)
@@ -3624,7 +3658,6 @@ void Editor::applySettings()
             eoRightMouseMovesCursor | eoScrollByOneLess | eoTabIndent | eoHideShowScrollbars;
 
     //options
-    options.setFlag(eoAddIndent,pSettings->editor().addIndent());
     options.setFlag(eoAutoIndent,pSettings->editor().autoIndent());
     options.setFlag(eoTabsToSpaces,pSettings->editor().tabToSpaces());
 
@@ -3724,6 +3757,10 @@ void Editor::applyColorScheme(const QString& schemeName)
         gutter().setTextColor(item->foreground());
         gutter().setColor(item->background());
     }
+    item = pColorManager->getItem(schemeName,COLOR_SCHEME_GUTTER_ACTIVE_LINE);
+    if (item) {
+        gutter().setActiveLineTextColor(item->foreground());
+    }
     item = pColorManager->getItem(schemeName,COLOR_SCHEME_FOLD_LINE);
     if (item) {
         codeFolding().folderBarLinesColor = item->foreground();
@@ -3744,6 +3781,9 @@ void Editor::applyColorScheme(const QString& schemeName)
     if (item) {
         setSelectedForeground(item->foreground());
         setSelectedBackground(item->background());
+    } else {
+        this->setForegroundColor(palette().color(QPalette::HighlightedText));
+        this->setBackgroundColor(palette().color(QPalette::Highlight));
     }
     item = pColorManager->getItem(schemeName,COLOR_SCHEME_ACTIVE_BREAKPOINT);
     if (item) {
@@ -3755,6 +3795,23 @@ void Editor::applyColorScheme(const QString& schemeName)
         this->mBreakpointForegroundColor = item->foreground();
         this->mBreakpointBackgroundColor = item->background();
     }
+    item = pColorManager->getItem(schemeName,COLOR_SCHEME_TEXT);
+    if (item) {
+        this->setForegroundColor(item->foreground());
+        this->setBackgroundColor(item->background());
+    } else {
+        this->setForegroundColor(palette().color(QPalette::Text));
+        this->setBackgroundColor(palette().color(QPalette::Base));
+    }
+    item = pColorManager->getItem(schemeName,COLOR_SCHEME_CURRENT_HIGHLIGHTED_WORD);
+    if (item) {
+        mCurrentHighlighWordForeground = item->foreground();
+        mCurrentHighlighWordBackground = item->background();
+    } else {
+        mCurrentHighlighWordForeground = selectedForeground();
+        mCurrentHighlighWordBackground = selectedBackground();
+    }
+
     this->invalidate();
 }
 

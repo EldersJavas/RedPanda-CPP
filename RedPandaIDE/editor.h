@@ -166,13 +166,13 @@ public:
     void print();
     void exportAsRTF(const QString& rtfFilename);
     void exportAsHTML(const QString& htmlFilename);
+    void resetBreakpoints();
 
     const PCppParser &parser();
 
     void tab() override;
 
 private slots:
-    void onModificationChanged(bool status) ;
     void onStatusChanged(SynStatusChanges changes);
     void onGutterClicked(Qt::MouseButton button, int x, int y, int line);
     void onTipEvalValueReady(const QString& value);
@@ -182,7 +182,6 @@ private slots:
 private:
     bool isBraceChar(QChar ch);
     void resetBookmarks();
-    void resetBreakpoints();
     QChar getCurrentChar();
     bool handleSymbolCompletion(QChar key);
     bool handleParentheseCompletion();
@@ -243,6 +242,8 @@ private:
     QColor mActiveBreakpointBackgroundColor;
     QColor mBreakpointForegroundColor;
     QColor mBreakpointBackgroundColor;
+    QColor mCurrentHighlighWordForeground;
+    QColor mCurrentHighlighWordBackground;
     int mSyntaxErrorLine;
     int mLineCount;
     int mGutterClickedLine;
@@ -257,11 +258,11 @@ private:
     QString mCurrentWord;
     QString mCurrentDebugTipWord;
     TipType mCurrentTipType;
-    QString mOldSelectionWord;
-    QString mSelectionWord;
+    QString mOldHighlightedWord;
+    QString mCurrentHighlightedWord;
 
     bool mSaving;
-
+    bool mCurrentLineModified;
     int mXOffsetSince;
     int mTabStopBegin;
     int mTabStopEnd;
@@ -298,6 +299,9 @@ public:
 
     // QWidget interface
     void setInProject(bool newInProject);
+
+    bool useCppSyntax() const;
+    void setUseCppSyntax(bool newUseCppSyntax);
 
 protected:
     void mouseReleaseEvent(QMouseEvent *event) override;

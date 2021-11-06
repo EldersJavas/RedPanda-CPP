@@ -64,16 +64,6 @@ void SynHighlighter::nextToEol()
         next();
 }
 
-int SynHighlighter::getLeftBraces()
-{
-    return 0;
-}
-
-int SynHighlighter::getRightBraces()
-{
-    return 0;
-}
-
 bool SynHighlighter::isSpaceChar(const QChar &ch)
 {
     return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
@@ -221,9 +211,16 @@ SynHighlighterAttribute::SynHighlighterAttribute(const QString &name):
 
 bool SynRangeState::operator==(const SynRangeState &s2)
 {
+    // indents contains the information of brace/parenthesis/brackets embedded levels
     return (state == s2.state)
             && (spaceState == s2.spaceState)
-            && (braceLevel == s2.braceLevel)
-            && (bracketLevel == s2.bracketLevel)
-            && (parenthesisLevel == s2.parenthesisLevel);
+            && (indents == s2.indents)
+            ;
+}
+
+int SynRangeState::getLastIndent()
+{
+    if (indents.isEmpty())
+        return -1;
+    return indents.back();
 }

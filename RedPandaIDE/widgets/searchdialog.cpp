@@ -148,9 +148,23 @@ void SearchDialog::on_btnCancel_clicked()
     this->close();
 }
 
+static void saveComboHistory(QComboBox* cb,const QString& text) {
+    QString s = text.trimmed();
+    if (s.isEmpty())
+        return;
+    int i = cb->findText(s);
+    if (i>=0) {
+        cb->removeItem(i);
+    }
+    cb->insertItem(0,s);
+    cb->setCurrentText(s);
+}
+
 void SearchDialog::on_btnExecute_clicked()
 {
     int findCount = 0;
+    saveComboHistory(ui->cbFind,ui->cbFind->currentText());
+    saveComboHistory(ui->cbReplace,ui->cbReplace->currentText());
 
     SearchAction actionType;
     switch (mTabBar->currentIndex()) {
@@ -262,8 +276,10 @@ void SearchDialog::on_btnExecute_clicked()
                 Editor * e=pMainWindow->editorList()->operator[](i);
                 if (e!=nullptr) {
                     fileSearched++;
-                    PSearchResultTreeItem parentItem = batchFindInEditor(e,
-                                                                         keyword);
+                    PSearchResultTreeItem parentItem = batchFindInEditor(
+                                e,
+                                e->filename(),
+                                keyword);
                     int t = parentItem->results.size();
                     findCount+=t;
                     if (t>0) {
@@ -277,13 +293,15 @@ void SearchDialog::on_btnExecute_clicked()
             PSearchResults results = pMainWindow->searchResultModel()->addSearchResults(
                         keyword,
                         mSearchOptions,
-                        SearchFileScope::openedFiles
+                        SearchFileScope::currentFile
                         );
             Editor * e= pMainWindow->editorList()->getEditor();
             if (e!=nullptr) {
                 fileSearched++;
-                PSearchResultTreeItem parentItem = batchFindInEditor(e,
-                                                                     keyword);
+                PSearchResultTreeItem parentItem = batchFindInEditor(
+                            e,
+                            e->filename(),
+                            keyword);
                 int t = parentItem->results.size();
                 findCount+=t;
                 if (t>0) {
@@ -303,8 +321,10 @@ void SearchDialog::on_btnExecute_clicked()
                 QString curFilename =  pMainWindow->project()->units()[i]->fileName();
                 if (e) {
                     fileSearched++;
-                    PSearchResultTreeItem parentItem = batchFindInEditor(e,
-                                                                         keyword);
+                    PSearchResultTreeItem parentItem = batchFindInEditor(
+                                e,
+                                e->filename(),
+                                keyword);
                     int t = parentItem->results.size();
                     findCount+=t;
                     if (t>0) {
@@ -312,10 +332,14 @@ void SearchDialog::on_btnExecute_clicked()
                         results->results.append(parentItem);
                     }
                 } else if (fileExists(curFilename)) {
-                    Editor editor(nullptr,curFilename,ENCODING_AUTO_DETECT,false,false,nullptr);
+                    SynEdit editor;
+                    QByteArray realEncoding;
+                    editor.lines()->loadFromFile(curFilename,ENCODING_AUTO_DETECT, realEncoding);
                     fileSearched++;
-                    PSearchResultTreeItem parentItem = batchFindInEditor(&editor,
-                                                                         keyword);
+                    PSearchResultTreeItem parentItem = batchFindInEditor(
+                                &editor,
+                                curFilename,
+                                keyword);
                     int t = parentItem->results.size();
                     findCount+=t;
                     if (t>0) {
@@ -325,26 +349,13 @@ void SearchDialog::on_btnExecute_clicked()
 
                 }
             }
-            //    end else if rbProjectFiles.Checked then begin
-            //      for I := 0 to MainForm.Project.Units.Count - 1 do begin
-            //        e := MainForm.Project.Units[i].Editor;
-            //        fCurFile := MainForm.Project.Units[i].FileName;
-
-            //        // file is already open, use memory
-            //        if Assigned(e) then begin begin
-            //          inc(fileSearched);
-            //          t:=Execute(e->text, actiontype);
-            //          Inc(findcount, t);
-            //          if t>0 then
-            //            inc(filehitted);
-            //        end;
+            pMainWindow->searchResultModel()->notifySearchResultsUpdated();
         }
-        if (findCount>0)
-            pMainWindow->showSearchPanel(actionType == SearchAction::ReplaceFiles);
+        pMainWindow->showSearchPanel(actionType == SearchAction::ReplaceFiles);
     }
 }
 
-int SearchDialog::execute(Editor *editor, const QString &sSearch, const QString &sReplace, SynSearchMathedProc matchCallback)
+int SearchDialog::execute(SynEdit *editor, const QString &sSearch, const QString &sReplace, SynSearchMathedProc matchCallback)
 {
     if (editor==nullptr)
         return 0;
@@ -369,7 +380,7 @@ int SearchDialog::execute(Editor *editor, const QString &sSearch, const QString 
                           mSearchEngine, matchCallback);
 }
 
-std::shared_ptr<SearchResultTreeItem> SearchDialog::batchFindInEditor(Editor *e, const QString &keyword)
+std::shared_ptr<SearchResultTreeItem> SearchDialog::batchFindInEditor(SynEdit *e, const QString& filename,const QString &keyword)
 {
     //backup
     BufferCoord caretBackup = e->caretXY();
@@ -379,13 +390,13 @@ std::shared_ptr<SearchResultTreeItem> SearchDialog::batchFindInEditor(Editor *e,
     int leftCharBackup = e->leftChar();
 
     PSearchResultTreeItem parentItem = std::make_shared<SearchResultTreeItem>();
-    parentItem->filename = e->filename();
+    parentItem->filename = filename;
     parentItem->parent = nullptr;
     execute(e,keyword,"",
-                    [e,&parentItem](const QString&,
+                    [e,&parentItem, filename](const QString&,
                     const QString&, int Line, int ch, int wordLen){
         PSearchResultTreeItem item = std::make_shared<SearchResultTreeItem>();
-        item->filename = e->filename();
+        item->filename = filename;
         item->line = Line;
         item->start = ch;
         item->len = wordLen;

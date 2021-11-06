@@ -38,9 +38,8 @@ void EditorGeneralWidget::doLoad()
 {
     pSettings->editor().load();
     //indents
-    ui->chkAddIndent->setChecked(pSettings->editor().addIndent());
     ui->chkAutoIndent->setChecked(pSettings->editor().autoIndent());
-    ui->chkTabToSpaces->setChecked(pSettings->editor().autoIndent());
+    ui->chkTabToSpaces->setChecked(pSettings->editor().tabToSpaces());
     ui->spTabWidth->setValue(pSettings->editor().tabWidth());
     ui->chkShowIndentLines->setChecked(pSettings->editor().showIndentLines());
     ui->colorIndentLine->setColor(pSettings->editor().indentLineColor());
@@ -70,9 +69,8 @@ void EditorGeneralWidget::doLoad()
 void EditorGeneralWidget::doSave()
 {
     //indents
-    pSettings->editor().setAddIndent(ui->chkAddIndent->isChecked());
     pSettings->editor().setAutoIndent(ui->chkAutoIndent->isChecked());
-    pSettings->editor().setAutoIndent(ui->chkTabToSpaces->isChecked());
+    pSettings->editor().setTabToSpaces(ui->chkTabToSpaces->isChecked());
     pSettings->editor().setTabWidth(ui->spTabWidth->value());
     pSettings->editor().setShowIndentLines(ui->chkShowIndentLines->isChecked());
     pSettings->editor().setIndentLineColor(ui->colorIndentLine->color());

@@ -11,7 +11,9 @@
 EditorList::EditorList(QTabWidget* leftPageWidget,
       QTabWidget* rightPageWidget,
       QSplitter* splitter,
-      QWidget* panel):
+      QWidget* panel,
+      QObject* parent):
+    QObject(parent),
     mLayout(LayoutShowType::lstLeft),
     mLeftPageWidget(leftPageWidget),
     mRightPageWidget(rightPageWidget),
@@ -134,9 +136,9 @@ bool EditorList::closeEditor(Editor* editor, bool transferFocus, bool force) {
         this->endUpdate();
     });
 
-    if (transferFocus && (editor->pageControl()->currentWidget()==editor)) {
-        //todo: activate & focus the previous editor
-    }
+//    if (transferFocus && (editor->pageControl()->currentWidget()==editor)) {
+//        //todo: activate & focus the previous editor
+//    }
 
     if (editor->inProject() && pMainWindow->project()) {
         int projIndex = pMainWindow->project()->indexInUnits(editor);
@@ -152,11 +154,12 @@ bool EditorList::closeEditor(Editor* editor, bool transferFocus, bool force) {
     updateLayout();
     if (!force) {
         editor = getEditor();
-        pMainWindow->updateClassBrowserForEditor(editor);
+        if (transferFocus && editor)
+            editor->activate();
+        else
+            pMainWindow->updateClassBrowserForEditor(editor);
     }
-    if (pageCount()==0) {
-        pMainWindow->updateAppTitle();
-    }
+    emit editorClosed();
     return true;
 }
 
@@ -287,7 +290,6 @@ bool EditorList::closeAll(bool force) {
             return false;
         }
     }
-    pMainWindow->updateAppTitle();
     return true;
 }
 
@@ -298,6 +300,7 @@ void EditorList::forceCloseEditor(Editor *editor)
     // Force layout update when creating, destroying or moving editors
     updateLayout();
     endUpdate();
+    emit editorClosed();
 }
 
 Editor* EditorList::getOpenedEditorByFilename(QString filename)

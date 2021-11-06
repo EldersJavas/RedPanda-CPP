@@ -32,6 +32,8 @@ CppParser::CppParser(QObject *parent) : QObject(parent)
     mIsHeader = false;
     mIsProjectFile = false;
 
+    mCppKeywords = CppKeywords;
+    mCppTypeKeywords = CppTypeKeywords;
     //mNamespaces;
     //mBlockBeginSkips;
     //mBlockEndSkips;
@@ -211,8 +213,37 @@ PStatementList CppParser::findNamespace(const QString &name)
     return mNamespaces.value(name,PStatementList());
 }
 
+PStatement CppParser::findStatement(const QString &fullname)
+{
+    QMutexLocker locker(&mMutex);
+    if (fullname.isEmpty())
+        return PStatement();
+    QStringList phrases = fullname.split("::");
+    if (phrases.isEmpty())
+        return PStatement();
+    PStatement parentStatement;
+    PStatement statement;
+    foreach (const QString& phrase, phrases) {
+        if (parentStatement && parentStatement->kind == StatementKind::skNamespace) {
+            PStatementList lst = findNamespace(parentStatement->fullName);
+            foreach (const PStatement& namespaceStatement, *lst) {
+                statement = findMemberOfStatement(phrase,namespaceStatement);
+                if (statement)
+                    break;
+            }
+        } else {
+            statement = findMemberOfStatement(phrase,parentStatement);
+        }
+        if (!statement)
+            return PStatement();
+        parentStatement = statement;
+    }
+    return statement;
+}
+
 PStatement CppParser::findStatementOf(const QString &fileName, const QString &phrase, int line)
 {
+    QMutexLocker locker(&mMutex);
     return findStatementOf(fileName,phrase,findAndScanBlockAt(fileName,line));
 }
 
@@ -1289,7 +1320,7 @@ bool CppParser::checkForForBlock()
 
 bool CppParser::checkForKeyword()
 {
-    SkipType st = CppKeywords.value(mTokenizer[mIndex]->text,SkipType::skNone);
+    SkipType st = mCppKeywords.value(mTokenizer[mIndex]->text,SkipType::skNone);
     return st!=SkipType::skNone;
 }
 
@@ -1773,7 +1804,7 @@ void CppParser::handleEnum()
             if (!mTokenizer[i + 1]->text.startsWith(';'))
                 enumName = mTokenizer[i + 1]->text.trimmed();
         }
-    } else { // enum NAME {...};
+    } else if (mIndex+1< mTokenizer.tokenCount() && mTokenizer[mIndex+1]->text.startsWith('{')){ // enum NAME {...};
         if ( (mIndex< mTokenizer.tokenCount()) && mTokenizer[mIndex]->text == "class") {
             //enum class {...} NAME
             isEnumClass = true;
@@ -1789,6 +1820,10 @@ void CppParser::handleEnum()
         // An opening brace must be present after NAME
         if ((mIndex >= mTokenizer.tokenCount()) || !mTokenizer[mIndex]->text.startsWith('{'))
             return;
+    } else {
+        // enum NAME blahblah
+        // it's an old c-style enum variable definition
+        return;
     }
 
     // Add statement for enum name too
@@ -1960,7 +1995,7 @@ void CppParser::handleForBlock()
 void CppParser::handleKeyword()
 {
     // Skip
-    SkipType skipType = CppKeywords.value(mTokenizer[mIndex]->text,SkipType::skNone);
+    SkipType skipType = mCppKeywords.value(mTokenizer[mIndex]->text,SkipType::skNone);
     switch (skipType) {
     case SkipType::skItself:
         // skip it;
@@ -3565,7 +3600,7 @@ QString CppParser::removeArgNames(const QString &args)
             } else if (!word.trimmed().isEmpty()) {
                 if (!typeGetted) {
                     currentArg += ' ' + word;
-                    if (CppTypeKeywords.contains(word) || !isKeyword(word))
+                    if (mCppTypeKeywords.contains(word) || !isKeyword(word))
                         typeGetted = true;
                 } else {
                     if (isKeyword(word))

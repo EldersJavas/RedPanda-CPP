@@ -922,8 +922,7 @@ QVariant CodeCompletionListModel::data(const QModelIndex &index, int role) const
         PStatement statement = mStatements->at(index.row());
         if (mColorCallback)
             return mColorCallback(statement);
-        QApplication *app = dynamic_cast<QApplication *>(QApplication::instance());
-        return app->palette().color(QPalette::Text);
+        return qApp->palette().color(QPalette::Text);
     }
     }
     return QVariant();
